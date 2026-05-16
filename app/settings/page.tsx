@@ -1,6 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { doc, setDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { useAuth } from '@/components/AuthProvider';
 import { useBusiness } from '@/hooks/useBusiness';
 import { useIsOwner } from '@/hooks/useIsOwner';
@@ -9,8 +11,9 @@ import { getAllBusinesses, adminDeleteBusiness, adminUpdateBusiness, updateBusin
 import { createBusiness, createPendingUser, addPendingMember } from '@/lib/adminFirestore';
 import { getAllUsers } from '@/lib/users';
 import { setUserOwner } from '@/lib/userOwner';
+import { getDomains, addDomain, deleteDomain, DEFAULT_DOMAINS } from '@/lib/domains';
 import { BottomNav } from '@/components/BottomNav';
-import { Business, MlaiUser } from '@/types';
+import { Business, MlaiUser, Domain, UNITS } from '@/types';
 
 function isOnline(lastSeen: unknown): boolean {
   if (!lastSeen) return false;
@@ -41,7 +44,7 @@ export default function SettingsPage() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [users, setUsers] = useState<MlaiUser[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'businesses' | 'users'>('businesses');
+  const [activeTab, setActiveTab] = useState<'businesses' | 'users' | 'domains'>('businesses');
   const [activeBizId, setActiveBizId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -78,13 +81,29 @@ export default function SettingsPage() {
   const [inviteLink, setInviteLink] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
 
+  // Domains state
+  const [domains, setDomains] = useState<Domain[]>([]);
+  const [confirmDeleteDomain, setConfirmDeleteDomain] = useState<string | null>(null);
+  const [showAddDomain, setShowAddDomain] = useState(false);
+  const [newDomainName, setNewDomainName] = useState('');
+  const [newDomainIcon, setNewDomainIcon] = useState('📦');
+  const [newDomainCategories, setNewDomainCategories] = useState('');
+  const [savingDomain, setSavingDomain] = useState(false);
+  const [seedingDomains, setSeedingDomains] = useState(false);
+  // Category editing
+  const [inlineEditKey, setInlineEditKey] = useState<string | null>(null); // "domainId:catIdx"
+  const [inlineEditVal, setInlineEditVal] = useState('');
+  const [addCatInput, setAddCatInput] = useState<Record<string, string>>({});
+  const [savingCatDomain, setSavingCatDomain] = useState<string | null>(null);
+
   useEffect(() => {
     if (authLoading || ownerLoading) return;
     if (!user || !isOwner) return;
     setAdminLoading(true);
-    Promise.all([getAllBusinesses(), getAllUsers()]).then(([b, u]) => {
+    Promise.all([getAllBusinesses(), getAllUsers(), getDomains()]).then(([b, u, d]) => {
       setBusinesses(b);
       setUsers(u);
+      setDomains(d);
       setAdminLoading(false);
     });
   }, [user, isOwner, authLoading, ownerLoading]);
@@ -216,6 +235,79 @@ export default function SettingsPage() {
     setPanelConfirmDelete(false);
   }
 
+  // Domain handlers
+  async function handleSeedDomains() {
+    setSeedingDomains(true);
+    for (const d of DEFAULT_DOMAINS) {
+      await addDomain(d);
+    }
+    const updated = await getDomains();
+    setDomains(updated);
+    setSeedingDomains(false);
+  }
+
+  async function handleAddDomain() {
+    if (!newDomainName.trim()) return;
+    setSavingDomain(true);
+    const cats = newDomainCategories.split(',').map((c) => c.trim()).filter(Boolean);
+    await addDomain({
+      name: newDomainName.trim(),
+      icon: newDomainIcon,
+      categories: cats.length ? cats : ['כללי', 'אחר'],
+      units: UNITS,
+      isDefault: false,
+    });
+    const updated = await getDomains();
+    setDomains(updated);
+    setNewDomainName('');
+    setNewDomainIcon('📦');
+    setNewDomainCategories('');
+    setShowAddDomain(false);
+    setSavingDomain(false);
+  }
+
+  async function handleDeleteDomain(id: string) {
+    await deleteDomain(id);
+    setDomains((prev) => prev.filter((d) => d.id !== id));
+    setConfirmDeleteDomain(null);
+  }
+
+  async function handleDeleteCategory(domainId: string, catIdx: number) {
+    const domain = domains.find((d) => d.id === domainId);
+    if (!domain) return;
+    const updated = domain.categories.filter((_, i) => i !== catIdx);
+    setSavingCatDomain(domainId);
+    await setDoc(doc(db, 'domains', domainId), { categories: updated }, { merge: true });
+    setDomains((prev) => prev.map((d) => d.id === domainId ? { ...d, categories: updated } : d));
+    setSavingCatDomain(null);
+  }
+
+  async function handleSaveCatEdit(domainId: string, catIdx: number) {
+    const newVal = inlineEditVal.trim();
+    if (!newVal) { setInlineEditKey(null); return; }
+    const domain = domains.find((d) => d.id === domainId);
+    if (!domain) return;
+    const updated = domain.categories.map((c, i) => (i === catIdx ? newVal : c));
+    setSavingCatDomain(domainId);
+    await setDoc(doc(db, 'domains', domainId), { categories: updated }, { merge: true });
+    setDomains((prev) => prev.map((d) => d.id === domainId ? { ...d, categories: updated } : d));
+    setInlineEditKey(null);
+    setSavingCatDomain(null);
+  }
+
+  async function handleAddCategory(domainId: string) {
+    const input = (addCatInput[domainId] ?? '').trim();
+    if (!input) return;
+    const domain = domains.find((d) => d.id === domainId);
+    if (!domain) return;
+    const updated = [...domain.categories, input];
+    setSavingCatDomain(domainId);
+    await setDoc(doc(db, 'domains', domainId), { categories: updated }, { merge: true });
+    setDomains((prev) => prev.map((d) => d.id === domainId ? { ...d, categories: updated } : d));
+    setAddCatInput((prev) => ({ ...prev, [domainId]: '' }));
+    setSavingCatDomain(null);
+  }
+
   // While auth/owner status resolves, show nothing special
   if (authLoading || ownerLoading) {
     return (
@@ -257,10 +349,14 @@ export default function SettingsPage() {
 
           {/* Tabs */}
           <div className="flex gap-2 mt-3">
-            {(['businesses', 'users'] as const).map((tab) => (
+            {(['businesses', 'users', 'domains'] as const).map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)}
                 className={`press flex-1 py-2 rounded-xl text-sm font-medium transition-all ${activeTab === tab ? 'bg-gray-900 text-white shadow-md shadow-gray-900/15' : 'glass text-gray-600'}`}>
-                {tab === 'businesses' ? `עסקים (${businesses.length})` : `משתמשים (${users.length})`}
+                {tab === 'businesses'
+                  ? `עסקים (${businesses.length})`
+                  : tab === 'users'
+                  ? `משתמשים (${users.length})`
+                  : `תחומים (${domains.length})`}
               </button>
             ))}
           </div>
@@ -273,13 +369,6 @@ export default function SettingsPage() {
             </div>
           ) : (
             <>
-              {/* Domains link */}
-              <button onClick={() => router.push('/admin/domains')}
-                className="press w-full glass rounded-2xl p-4 flex items-center justify-between">
-                <span className="text-indigo-500 font-medium text-sm">ניהול תחומים →</span>
-                <span className="text-2xl">🗂️</span>
-              </button>
-
               {/* Businesses tab */}
               {activeTab === 'businesses' && (
                 <>
@@ -588,13 +677,185 @@ export default function SettingsPage() {
                 </>
               )}
 
-              {/* Sign out */}
-              <button
-                onClick={handleSignOut}
-                className="press w-full bg-white/70 border border-red-100 text-red-500 py-4 rounded-2xl text-sm font-medium transition-all"
-              >
-                התנתקות
-              </button>
+              {/* Domains tab */}
+              {activeTab === 'domains' && (
+                <>
+                  {domains.length === 0 && (
+                    <div className="glass rounded-2xl p-5 text-center space-y-3">
+                      <p className="text-gray-400 text-sm">אין תחומים. טען את ברירות המחדל:</p>
+                      <button
+                        onClick={handleSeedDomains}
+                        disabled={seedingDomains}
+                        className="press bg-gray-900 text-white px-5 py-2.5 rounded-xl text-sm font-medium"
+                      >
+                        {seedingDomains ? 'טוען...' : '⚡ טען תחומי ברירת מחדל'}
+                      </button>
+                    </div>
+                  )}
+
+                  {domains.map((d) => (
+                    <div key={d.id} className="glass rounded-2xl p-4 animate-fade-in space-y-3">
+                      {/* Domain header */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {!d.isDefault && (
+                            <button
+                              onClick={() => setConfirmDeleteDomain(d.id)}
+                              className="press text-red-400 text-xs border border-red-100 bg-red-50 px-2.5 py-1 rounded-xl"
+                            >
+                              מחק
+                            </button>
+                          )}
+                          {savingCatDomain === d.id && (
+                            <span className="text-[10px] text-indigo-400 font-medium">שומר...</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-right">
+                            <p className="font-semibold text-gray-900 text-sm">{d.name}</p>
+                            <p className="text-xs text-gray-400">{d.categories.length} קטגוריות</p>
+                          </div>
+                          <span className="text-2xl">{d.icon}</span>
+                        </div>
+                      </div>
+
+                      {/* Category chips */}
+                      <div className="flex flex-wrap gap-1.5 justify-end">
+                        {d.categories.map((cat, idx) => {
+                          const editKey = `${d.id}:${idx}`;
+                          const isEditing = inlineEditKey === editKey;
+                          return isEditing ? (
+                            <div key={editKey} className="flex items-center gap-1">
+                              <button
+                                onClick={() => setInlineEditKey(null)}
+                                className="press text-[10px] text-gray-400 px-1.5 py-0.5 rounded-lg glass"
+                              >
+                                ✕
+                              </button>
+                              <button
+                                onClick={() => handleSaveCatEdit(d.id, idx)}
+                                className="press text-[10px] text-white bg-indigo-600 px-2 py-0.5 rounded-lg"
+                              >
+                                ✓
+                              </button>
+                              <input
+                                autoFocus
+                                value={inlineEditVal}
+                                onChange={(e) => setInlineEditVal(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleSaveCatEdit(d.id, idx);
+                                  if (e.key === 'Escape') setInlineEditKey(null);
+                                }}
+                                className="border border-indigo-300 rounded-lg px-2 py-0.5 text-xs text-right focus:outline-none focus:ring-1 focus:ring-indigo-300 bg-white w-24"
+                                dir="rtl"
+                              />
+                            </div>
+                          ) : (
+                            <span
+                              key={cat + idx}
+                              className="group flex items-center gap-0.5 text-[11px] bg-gray-100 text-gray-700 pl-1 pr-2 py-0.5 rounded-full"
+                            >
+                              <button
+                                onClick={() => handleDeleteCategory(d.id, idx)}
+                                className="press opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-400 text-[10px] leading-none w-3.5 h-3.5 flex items-center justify-center"
+                                aria-label="מחק קטגוריה"
+                              >
+                                ✕
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setInlineEditKey(`${d.id}:${idx}`);
+                                  setInlineEditVal(cat);
+                                }}
+                                className="press"
+                              >
+                                {cat}
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+
+                      {/* Add category input */}
+                      <div className="flex gap-2 items-center" dir="rtl">
+                        <button
+                          onClick={() => handleAddCategory(d.id)}
+                          disabled={!(addCatInput[d.id] ?? '').trim() || savingCatDomain === d.id}
+                          className="press text-xs font-semibold text-white bg-indigo-600 px-3 py-1.5 rounded-xl disabled:opacity-40 flex-shrink-0"
+                        >
+                          הוסף
+                        </button>
+                        <input
+                          type="text"
+                          value={addCatInput[d.id] ?? ''}
+                          onChange={(e) => setAddCatInput((prev) => ({ ...prev, [d.id]: e.target.value }))}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory(d.id); }}
+                          placeholder="+ הוסף קטגוריה"
+                          className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-xs text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white/70"
+                          dir="rtl"
+                        />
+                      </div>
+
+                      {/* Delete confirm */}
+                      {confirmDeleteDomain === d.id && (
+                        <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex gap-2 animate-scale-in">
+                          <button onClick={() => setConfirmDeleteDomain(null)} className="press flex-1 py-1.5 rounded-xl border border-gray-200 text-xs bg-white">ביטול</button>
+                          <button onClick={() => handleDeleteDomain(d.id)} className="press flex-1 py-1.5 rounded-xl bg-red-500 text-white text-xs">מחק</button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* Add domain */}
+                  {!showAddDomain ? (
+                    <button
+                      onClick={() => setShowAddDomain(true)}
+                      className="press w-full glass rounded-2xl py-4 text-sm font-medium text-indigo-500"
+                    >
+                      + הוסף תחום חדש
+                    </button>
+                  ) : (
+                    <div className="glass rounded-2xl p-4 space-y-3 animate-scale-in">
+                      <p className="text-sm font-semibold text-gray-900 text-right">תחום חדש</p>
+                      <div className="flex gap-2">
+                        <input
+                          value={newDomainIcon}
+                          onChange={(e) => setNewDomainIcon(e.target.value)}
+                          className="w-14 border border-gray-200 rounded-xl px-2 py-2.5 text-center text-lg focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                          placeholder="📦"
+                        />
+                        <input
+                          value={newDomainName}
+                          onChange={(e) => setNewDomainName(e.target.value)}
+                          className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-right text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                          placeholder="שם התחום"
+                        />
+                      </div>
+                      <textarea
+                        value={newDomainCategories}
+                        onChange={(e) => setNewDomainCategories(e.target.value)}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-right text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none h-20"
+                        placeholder="קטגוריות מופרדות בפסיקים: בגדים, נעליים, אביזרים"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setShowAddDomain(false)}
+                          className="press flex-1 py-2.5 rounded-xl glass text-sm"
+                        >
+                          ביטול
+                        </button>
+                        <button
+                          onClick={handleAddDomain}
+                          disabled={savingDomain || !newDomainName.trim()}
+                          className="press flex-1 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-medium disabled:opacity-50"
+                        >
+                          {savingDomain ? 'שומר...' : 'הוסף תחום'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </>
           )}
         </div>
@@ -813,14 +1074,6 @@ export default function SettingsPage() {
             <span className="text-xl">👥</span>
           </button>
         )}
-
-        {/* Sign out */}
-        <button
-          onClick={handleSignOut}
-          className="press w-full bg-white/70 border border-red-100 text-red-500 py-4 rounded-2xl text-sm font-medium transition-all"
-        >
-          התנתקות
-        </button>
       </div>
 
       <BottomNav />
