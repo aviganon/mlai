@@ -1,10 +1,10 @@
 import {
   collection, doc, addDoc, updateDoc, deleteDoc,
-  onSnapshot, query, where, orderBy, getDocs, getDoc,
+  onSnapshot, query, where, orderBy, getDocs, getDoc, setDoc,
   increment, serverTimestamp, limit,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Business, InventoryItem, BusinessType, BusinessMember, InvoiceLogEntry, ReorderSuggestion } from '@/types';
+import { Business, InventoryItem, BusinessType, BusinessMember, InvoiceLogEntry, ReorderSuggestion, SupplierDetails, PurchaseOrder, PurchaseOrderItem } from '@/types';
 
 // ─── Team / Invite ────────────────────────────────────────────
 
@@ -167,6 +167,21 @@ export function subscribeToInvoiceLog(
   });
 }
 
+export async function getInvoiceLogRange(
+  businessId: string,
+  from: Date,
+  to: Date
+): Promise<InvoiceLogEntry[]> {
+  const q = query(
+    collection(db, 'businesses', businessId, 'invoiceLog'),
+    where('parsedAt', '>=', from),
+    where('parsedAt', '<=', to),
+    orderBy('parsedAt', 'desc')
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })) as InvoiceLogEntry[];
+}
+
 // ─── Reorder Suggestions ──────────────────────────────────────
 
 export function subscribeToReorderSuggestions(
@@ -180,5 +195,87 @@ export function subscribeToReorderSuggestions(
   return onSnapshot(q, (snap) => {
     const suggestions = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ReorderSuggestion[];
     callback(suggestions);
+  });
+}
+
+// ─── Supplier Details ─────────────────────────────────────────
+
+export async function getSupplierDetails(
+  businessId: string,
+  supplierName: string
+): Promise<SupplierDetails | null> {
+  const snap = await getDoc(doc(db, 'businesses', businessId, 'supplierDetails', supplierName));
+  if (!snap.exists()) return null;
+  return snap.data() as SupplierDetails;
+}
+
+export async function saveSupplierDetails(
+  businessId: string,
+  supplierName: string,
+  data: Partial<SupplierDetails>
+): Promise<void> {
+  await setDoc(
+    doc(db, 'businesses', businessId, 'supplierDetails', supplierName),
+    { ...data, name: supplierName, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
+}
+
+// ─── Purchase Orders ──────────────────────────────────────────
+
+export async function createPurchaseOrder(
+  businessId: string,
+  createdBy: string,
+  items: PurchaseOrderItem[]
+): Promise<string> {
+  const totalEstimate = items.reduce((sum, i) => sum + i.qty * i.price, 0);
+  const ref = await addDoc(collection(db, 'businesses', businessId, 'purchaseOrders'), {
+    items,
+    status: 'pending',
+    createdAt: serverTimestamp(),
+    createdBy,
+    totalEstimate,
+  });
+  return ref.id;
+}
+
+export async function updateOrderStatus(
+  businessId: string,
+  orderId: string,
+  status: PurchaseOrder['status']
+): Promise<void> {
+  await updateDoc(doc(db, 'businesses', businessId, 'purchaseOrders', orderId), { status });
+}
+
+export async function receiveOrder(
+  businessId: string,
+  orderId: string,
+  items: PurchaseOrderItem[]
+): Promise<void> {
+  await updateDoc(doc(db, 'businesses', businessId, 'purchaseOrders', orderId), {
+    status: 'received',
+  });
+  await Promise.all(
+    items.map((item) =>
+      updateDoc(doc(db, 'businesses', businessId, 'items', item.itemId), {
+        stock: increment(item.qty),
+        lastUpdated: serverTimestamp(),
+        lastUpdatedBy: 'manual',
+      })
+    )
+  );
+}
+
+export function subscribeToOrders(
+  businessId: string,
+  callback: (orders: PurchaseOrder[]) => void
+): () => void {
+  const q = query(
+    collection(db, 'businesses', businessId, 'purchaseOrders'),
+    orderBy('createdAt', 'desc')
+  );
+  return onSnapshot(q, (snap) => {
+    const orders = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as PurchaseOrder[];
+    callback(orders);
   });
 }

@@ -6,6 +6,14 @@ import { useBusiness } from '@/hooks/useBusiness';
 import { getOrCreateInviteCode, getTeamMembers, removeTeamMember } from '@/lib/firestore';
 import { BottomNav } from '@/components/BottomNav';
 import { BusinessMember } from '@/types';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
+
+const ROLE_LABELS: Record<string, string> = {
+  owner: 'מנהל',
+  buyer: 'קניין',
+  employee: 'עובד',
+};
 
 export default function TeamPage() {
   const { user } = useAuth();
@@ -41,6 +49,14 @@ export default function TeamPage() {
     await removeTeamMember(business.id, uid);
     setMembers((prev) => prev.filter((m) => m.uid !== uid));
     setConfirmRemove(null);
+  }
+
+  async function handleRoleChange(uid: string, newRole: 'owner' | 'buyer' | 'employee') {
+    if (!business) return;
+    await updateDoc(doc(db, 'businesses', business.id), {
+      [`members.${uid}.role`]: newRole,
+    });
+    setMembers((prev) => prev.map((m) => m.uid === uid ? { ...m, role: newRole } : m));
   }
 
   if (loading) return (
@@ -88,23 +104,42 @@ export default function TeamPage() {
 
         {/* Members list */}
         {members.map((m) => (
-          <div key={m.uid} className="glass rounded-2xl p-4 flex items-center gap-3 animate-fade-in">
-            <div className="w-10 h-10 rounded-2xl bg-gray-100 flex items-center justify-center flex-shrink-0">
-              <span className="text-gray-500 text-sm font-bold">{(m.displayName ?? m.email ?? '?')[0].toUpperCase()}</span>
-            </div>
-            <div className="flex-1 text-right min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">{m.displayName ?? m.email}</p>
-              <p className="text-xs text-gray-400 truncate">{m.email}</p>
+          <div key={m.uid} className="glass rounded-2xl p-4 animate-fade-in">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+                <span className="text-gray-500 text-sm font-bold">{(m.displayName ?? m.email ?? '?')[0].toUpperCase()}</span>
+              </div>
+              <div className="flex-1 text-right min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">{m.displayName ?? m.email}</p>
+                <p className="text-xs text-gray-400 truncate">{m.email}</p>
+              </div>
+              {isOwner ? (
+                <select
+                  value={m.role ?? 'employee'}
+                  onChange={(e) => handleRoleChange(m.uid, e.target.value as 'owner' | 'buyer' | 'employee')}
+                  className="text-xs border border-gray-200 rounded-xl px-2 py-1 bg-white/80 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                >
+                  <option value="employee">עובד</option>
+                  <option value="buyer">קניין</option>
+                  <option value="owner">מנהל</option>
+                </select>
+              ) : (
+                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                  {ROLE_LABELS[m.role ?? 'employee']}
+                </span>
+              )}
             </div>
             {isOwner && (
-              confirmRemove === m.uid ? (
-                <div className="flex gap-1.5">
-                  <button onClick={() => setConfirmRemove(null)} className="press px-2 py-1 rounded-lg border border-gray-200 text-xs bg-white">לא</button>
-                  <button onClick={() => handleRemove(m.uid)} className="press px-2 py-1 rounded-lg bg-red-500 text-white text-xs">הסר</button>
-                </div>
-              ) : (
-                <button onClick={() => setConfirmRemove(m.uid)} className="press text-xs text-red-400 border border-red-100 bg-red-50 px-2.5 py-1 rounded-xl">הסר</button>
-              )
+              <div className="mt-2 flex justify-start">
+                {confirmRemove === m.uid ? (
+                  <div className="flex gap-1.5">
+                    <button onClick={() => setConfirmRemove(null)} className="press px-2 py-1 rounded-lg border border-gray-200 text-xs bg-white">לא</button>
+                    <button onClick={() => handleRemove(m.uid)} className="press px-2 py-1 rounded-lg bg-red-500 text-white text-xs">הסר</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setConfirmRemove(m.uid)} className="press text-xs text-red-400 border border-red-100 bg-red-50 px-2.5 py-1 rounded-xl">הסר</button>
+                )}
+              </div>
             )}
           </div>
         ))}

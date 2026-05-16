@@ -4,9 +4,9 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { useBusiness } from '@/hooks/useBusiness';
 import { useItems } from '@/hooks/useItems';
+import { getSupplierDetails, saveSupplierDetails } from '@/lib/firestore';
 import { BottomNav } from '@/components/BottomNav';
-import { InventoryItem } from '@/types';
-import { signOutUser } from '@/lib/auth';
+import { InventoryItem, SupplierDetails } from '@/types';
 
 interface SupplierGroup {
   name: string;
@@ -20,6 +20,8 @@ function stockDot(item: InventoryItem) {
   return 'bg-emerald-400';
 }
 
+const inputCls = 'w-full bg-white/70 border border-gray-200 rounded-xl px-3 py-2.5 text-right text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 transition-all';
+
 export default function SuppliersPage() {
   const { user, loading: authLoading } = useAuth();
   const { business, loading: bizLoading } = useBusiness();
@@ -28,12 +30,30 @@ export default function SuppliersPage() {
 
   const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [supplierDetails, setSupplierDetails] = useState<SupplierDetails | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
+  const [editPhone, setEditPhone] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editDeliveryDays, setEditDeliveryDays] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [savingDetails, setSavingDetails] = useState(false);
 
   useEffect(() => {
     if (authLoading || bizLoading) return;
     if (!user) router.replace('/login');
     else if (!business) router.replace('/onboarding');
   }, [user, business, authLoading, bizLoading, router]);
+
+  useEffect(() => {
+    if (!selectedSupplier || !business) return;
+    getSupplierDetails(business.id, selectedSupplier).then((d) => {
+      setSupplierDetails(d);
+      setEditPhone(d?.phone ?? '');
+      setEditEmail(d?.email ?? '');
+      setEditDeliveryDays(d?.deliveryDays ? String(d.deliveryDays) : '');
+      setEditNotes(d?.notes ?? '');
+    });
+  }, [selectedSupplier, business]);
 
   const suppliers = useMemo<SupplierGroup[]>(() => {
     const map = new Map<string, InventoryItem[]>();
@@ -69,9 +89,17 @@ export default function SuppliersPage() {
     [suppliers, selectedSupplier]
   );
 
-  async function handleSignOut() {
-    await signOutUser();
-    router.replace('/login');
+  async function handleSaveDetails() {
+    if (!business || !selectedSupplier) return;
+    setSavingDetails(true);
+    await saveSupplierDetails(business.id, selectedSupplier, {
+      phone: editPhone.trim() || undefined,
+      email: editEmail.trim() || undefined,
+      deliveryDays: editDeliveryDays ? parseInt(editDeliveryDays) : undefined,
+      notes: editNotes.trim() || undefined,
+    });
+    setSavingDetails(false);
+    setShowDetails(false);
   }
 
   if (authLoading || bizLoading) {
@@ -87,26 +115,11 @@ export default function SuppliersPage() {
     <div className="min-h-screen pb-28">
       {/* Header */}
       <div className="glass-strong sticky top-0 z-10 px-4 pt-12 pb-3">
-        {/* Top bar: business name (right) + lang/logout (left) */}
-        <div className="flex items-center justify-between mb-2 animate-slide-down">
-          <p className="text-sm font-bold text-gray-900 truncate max-w-[55%]">{business.name}</p>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-gray-400 glass rounded-lg px-2 py-1 select-none">עב</span>
-            <button
-              onClick={handleSignOut}
-              className="press flex items-center gap-1 text-sm text-gray-500 glass rounded-xl px-3 py-1.5"
-            >
-              יציאה
-            </button>
-          </div>
-        </div>
-
-        {/* Page title row */}
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-3 animate-slide-down">
           <div className="flex items-center gap-2">
             {selectedSupplier ? (
               <button
-                onClick={() => setSelectedSupplier(null)}
+                onClick={() => { setSelectedSupplier(null); setShowDetails(false); }}
                 className="press w-8 h-8 rounded-xl glass flex items-center justify-center text-gray-500 text-sm"
               >
                 ←
@@ -147,7 +160,6 @@ export default function SuppliersPage() {
           <div className="w-7 h-7 rounded-full border-2 border-indigo-200 border-t-indigo-400 animate-spin-smooth" />
         </div>
       ) : selectedSupplier && activeGroup ? (
-        /* Supplier detail view */
         <div className="px-4 pt-3 space-y-2">
           {/* Stats row */}
           <div className="grid grid-cols-3 gap-2 mb-3 animate-slide-up">
@@ -161,16 +173,59 @@ export default function SuppliersPage() {
               label="ממוצע מלאי"
               value={
                 activeGroup.items.length > 0
-                  ? String(
-                      Math.round(
-                        activeGroup.items.reduce((s, i) => s + i.stock, 0) /
-                          activeGroup.items.length
-                      )
-                    )
+                  ? String(Math.round(activeGroup.items.reduce((s, i) => s + i.stock, 0) / activeGroup.items.length))
                   : '—'
               }
             />
           </div>
+
+          {/* Supplier details collapsible */}
+          {selectedSupplier !== 'ללא ספק' && (
+            <div className="glass rounded-2xl overflow-hidden animate-fade-in">
+              <button
+                onClick={() => setShowDetails(!showDetails)}
+                className="press w-full flex items-center justify-between p-4 text-right"
+              >
+                <span className="text-indigo-500 text-xs">{showDetails ? '▲ סגור' : '▼ ערוך'}</span>
+                <span className="text-sm font-medium text-gray-700">פרטי ספק</span>
+              </button>
+              {showDetails && (
+                <div className="px-4 pb-4 space-y-3 border-t border-gray-100">
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    <div>
+                      <label className="block text-xs text-gray-500 text-right mb-1">טלפון</label>
+                      <input type="tel" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="050-..." className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 text-right mb-1">אימייל</label>
+                      <input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} placeholder="mail@..." className={inputCls} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 text-right mb-1">ימי אספקה</label>
+                    <input type="number" value={editDeliveryDays} onChange={(e) => setEditDeliveryDays(e.target.value)} placeholder="מספר ימים" className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 text-right mb-1">הערות</label>
+                    <textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="פרטים נוספים..." rows={2} className={inputCls + ' resize-none'} />
+                  </div>
+                  <button
+                    onClick={handleSaveDetails}
+                    disabled={savingDetails}
+                    className="press w-full bg-gray-900 text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50"
+                  >
+                    {savingDetails ? 'שומר...' : 'שמור פרטים'}
+                  </button>
+                </div>
+              )}
+              {!showDetails && (supplierDetails?.phone || supplierDetails?.deliveryDays) && (
+                <div className="px-4 pb-3 flex gap-4 justify-end text-xs text-gray-500">
+                  {supplierDetails.phone && <span>📞 {supplierDetails.phone}</span>}
+                  {supplierDetails.deliveryDays && <span>🚚 {supplierDetails.deliveryDays} ימים</span>}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Items list */}
           {activeGroup.items.map((item, i) => (
@@ -200,7 +255,6 @@ export default function SuppliersPage() {
           ))}
         </div>
       ) : (
-        /* Supplier list view */
         <div className="px-4 pt-3 space-y-2">
           {filteredSuppliers.length === 0 && (
             <div className="text-center py-16 animate-scale-in">
@@ -224,11 +278,8 @@ export default function SuppliersPage() {
               style={{ animationDelay: `${i * 50}ms` }}
             >
               <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-50 to-violet-50 flex items-center justify-center flex-shrink-0 border border-indigo-100">
-                <span className="text-xl">
-                  {supplier.name === 'ללא ספק' ? '📦' : '🚚'}
-                </span>
+                <span className="text-xl">{supplier.name === 'ללא ספק' ? '📦' : '🚚'}</span>
               </div>
-
               <div className="flex-1 min-w-0 text-right">
                 <p className="font-semibold text-gray-900 truncate">{supplier.name}</p>
                 <p className="text-xs text-gray-400 mt-0.5">
@@ -240,19 +291,14 @@ export default function SuppliersPage() {
                   )}
                 </p>
               </div>
-
               <div className="flex gap-1 flex-shrink-0">
                 {supplier.items.slice(0, 5).map((item) => (
-                  <span
-                    key={item.id}
-                    className={`w-2 h-2 rounded-full ${stockDot(item)}`}
-                  />
+                  <span key={item.id} className={`w-2 h-2 rounded-full ${stockDot(item)}`} />
                 ))}
                 {supplier.items.length > 5 && (
                   <span className="text-xs text-gray-300">+{supplier.items.length - 5}</span>
                 )}
               </div>
-
               <span className="text-gray-300 text-sm flex-shrink-0">‹</span>
             </button>
           ))}
@@ -264,20 +310,10 @@ export default function SuppliersPage() {
   );
 }
 
-function StatCard({
-  label,
-  value,
-  alert = false,
-}: {
-  label: string;
-  value: string;
-  alert?: boolean;
-}) {
+function StatCard({ label, value, alert = false }: { label: string; value: string; alert?: boolean }) {
   return (
     <div className="glass rounded-2xl p-3 text-center">
-      <p className={`text-xl font-bold ${alert ? 'text-amber-500' : 'text-gray-900'}`}>
-        {value}
-      </p>
+      <p className={`text-xl font-bold ${alert ? 'text-amber-500' : 'text-gray-900'}`}>{value}</p>
       <p className="text-xs text-gray-400 mt-0.5">{label}</p>
     </div>
   );

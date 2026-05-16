@@ -23,6 +23,10 @@ export interface InventoryItem {
   sku: string;
   lastUpdated: Date;
   lastUpdatedBy: 'manual' | 'invoice' | 'sale';
+  packSize?: number;
+  minOrder?: number;
+  deliveryDays?: number;
+  targetStock?: number;
 }
 
 export const DEFAULT_CATEGORIES = [
@@ -49,7 +53,7 @@ export interface MlaiUser {
   photoURL: string | null;
   isOwner: boolean;
   businessId: string | null;
-  role: 'owner' | 'employee';
+  role: 'owner' | 'buyer' | 'employee';
   lastSeen: Date;
   createdAt: Date;
 }
@@ -67,7 +71,7 @@ export interface BusinessMember {
   uid: string;
   email: string;
   displayName: string | null;
-  role: 'owner' | 'employee';
+  role: 'owner' | 'buyer' | 'employee';
   addedAt: Date;
 }
 
@@ -108,4 +112,31 @@ export interface ReorderSuggestion {
   supplier: string;
   unit: string;
   createdAt: Date;
+}
+
+export interface SupplierDetails {
+  name: string;
+  phone?: string;
+  email?: string;
+  deliveryDays?: number;
+  notes?: string;
+  updatedAt?: Date;
+}
+
+export interface PurchaseOrderItem {
+  itemId: string;
+  itemName: string;
+  supplier: string;
+  qty: number;
+  unit: string;
+  price: number;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  items: PurchaseOrderItem[];
+  status: 'pending' | 'approved' | 'received';
+  createdAt: Date;
+  createdBy: string;
+  totalEstimate: number;
 }

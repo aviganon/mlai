@@ -32,6 +32,11 @@ export default function EditItemPage() {
   const [price, setPrice] = useState('');
   const [supplier, setSupplier] = useState('');
   const [sku, setSku] = useState('');
+  const [packSize, setPackSize] = useState('');
+  const [minOrder, setMinOrder] = useState('');
+  const [deliveryDays, setDeliveryDays] = useState('');
+  const [targetStock, setTargetStock] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -46,6 +51,13 @@ export default function EditItemPage() {
     setPrice(item.price ? String(item.price) : '');
     setSupplier(item.supplier || '');
     setSku(item.sku || '');
+    setPackSize(item.packSize ? String(item.packSize) : '');
+    setMinOrder(item.minOrder ? String(item.minOrder) : '');
+    setDeliveryDays(item.deliveryDays ? String(item.deliveryDays) : '');
+    setTargetStock(item.targetStock ? String(item.targetStock) : '');
+    if (item.packSize || item.minOrder || item.deliveryDays || item.targetStock) {
+      setShowAdvanced(true);
+    }
   }, [item]);
 
   async function handleDelta(delta: number) {
@@ -63,6 +75,10 @@ export default function EditItemPage() {
       price: parseFloat(price) || 0,
       supplier: supplier.trim(),
       sku: sku.trim(),
+      packSize: packSize ? parseFloat(packSize) : undefined,
+      minOrder: minOrder ? parseFloat(minOrder) : undefined,
+      deliveryDays: deliveryDays ? parseInt(deliveryDays) : undefined,
+      targetStock: targetStock ? parseFloat(targetStock) : undefined,
     });
     setSaving(false);
     router.back();
@@ -83,7 +99,6 @@ export default function EditItemPage() {
 
   return (
     <div className="min-h-screen pb-28">
-      {/* Header */}
       <div className="glass-strong sticky top-0 z-10 px-4 pt-12 pb-4 flex items-center gap-3 animate-slide-down">
         <button
           onClick={() => router.back()}
@@ -95,7 +110,7 @@ export default function EditItemPage() {
       </div>
 
       <div className="px-4 py-4 space-y-4 animate-slide-up">
-        {/* Big stock control */}
+        {/* Stock control */}
         <div className="glass rounded-3xl p-5 text-center">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">כמות נוכחית</p>
           <div className="flex items-center justify-center gap-6 mb-2">
@@ -106,9 +121,7 @@ export default function EditItemPage() {
             >
               −
             </button>
-            <div className="text-center">
-              <span className="text-6xl font-bold text-gray-900 tabular-nums">{stock}</span>
-            </div>
+            <span className="text-6xl font-bold text-gray-900 tabular-nums">{stock}</span>
             <button
               onClick={() => handleDelta(1)}
               className="press w-14 h-14 rounded-2xl bg-white border border-gray-200 flex items-center justify-center text-2xl font-medium text-gray-700 shadow-sm"
@@ -144,7 +157,7 @@ export default function EditItemPage() {
           </Field>
         </div>
 
-        {/* Unit + Min */}
+        {/* Main fields */}
         <div className="glass rounded-3xl p-4 space-y-4">
           <Field label="יחידת מידה">
             <select value={unit} onChange={(e) => setUnit(e.target.value as ItemUnit)} className={inputCls}>
@@ -152,7 +165,7 @@ export default function EditItemPage() {
             </select>
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="מינימום">
+            <Field label="מינימום התראה">
               <input type="number" inputMode="decimal" value={minStock} onChange={(e) => setMinStock(parseFloat(e.target.value) || 0)} className={inputCls} />
             </Field>
             <Field label='מחיר (₪)'>
@@ -167,6 +180,37 @@ export default function EditItemPage() {
               <input type="text" value={sku} onChange={(e) => setSku(e.target.value)} placeholder="אופציונלי" className={inputCls} />
             </Field>
           </div>
+        </div>
+
+        {/* Advanced settings collapsible */}
+        <div className="glass rounded-3xl overflow-hidden">
+          <button
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="press w-full flex items-center justify-between p-4 text-right"
+          >
+            <span className="text-indigo-500 text-sm">{showAdvanced ? '▲' : '▼'}</span>
+            <span className="text-sm font-medium text-gray-700">הגדרות מתקדמות</span>
+          </button>
+          {showAdvanced && (
+            <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
+              <div className="grid grid-cols-2 gap-3 mt-4">
+                <Field label="מלאי תקן">
+                  <input type="number" inputMode="decimal" value={targetStock} onChange={(e) => setTargetStock(e.target.value)} placeholder="יעד מלאי" className={inputCls} />
+                </Field>
+                <Field label="כמות במארז">
+                  <input type="number" inputMode="decimal" value={packSize} onChange={(e) => setPackSize(e.target.value)} placeholder="יח׳ במארז" className={inputCls} />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="מינ׳ הזמנה">
+                  <input type="number" inputMode="decimal" value={minOrder} onChange={(e) => setMinOrder(e.target.value)} placeholder="כמות מינ׳" className={inputCls} />
+                </Field>
+                <Field label="ימי אספקה">
+                  <input type="number" inputMode="numeric" value={deliveryDays} onChange={(e) => setDeliveryDays(e.target.value)} placeholder="ימים" className={inputCls} />
+                </Field>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Delete */}

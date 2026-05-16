@@ -3,55 +3,28 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { useBusiness } from '@/hooks/useBusiness';
-import { useIsOwner } from '@/hooks/useIsOwner';
 import { useItems } from '@/hooks/useItems';
 import { useInvoiceLog } from '@/hooks/useInvoiceLog';
 import { useReorderSuggestions } from '@/hooks/useReorderSuggestions';
 import { ItemCard } from '@/components/ItemCard';
 import { BottomNav } from '@/components/BottomNav';
 import { DEFAULT_CATEGORIES, InvoiceLogEntry, ReorderSuggestion } from '@/types';
-import { signOutUser } from '@/lib/auth';
-
-interface ImpersonationData {
-  businessId: string;
-  businessName: string;
-}
 
 export default function HomePage() {
   const { user, loading: authLoading } = useAuth();
   const { business, loading: bizLoading } = useBusiness();
-  const { isOwner } = useIsOwner();
+  const { items, loading: itemsLoading } = useItems(business?.id ?? null);
+  const { entries: invoiceLog } = useInvoiceLog(business?.id ?? null);
+  const { suggestions: reorderSuggestions } = useReorderSuggestions(business?.id ?? null);
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('הכל');
-  const [impersonating, setImpersonating] = useState<ImpersonationData | null>(null);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const raw = localStorage.getItem('mlaiImpersonating');
-    if (raw) {
-      try { setImpersonating(JSON.parse(raw)); } catch { /* ignore */ }
-    }
-  }, []);
-
-  const effectiveBusinessId = (isOwner && impersonating)
-    ? impersonating.businessId
-    : (business?.id ?? null);
-
-  const { items, loading: itemsLoading } = useItems(effectiveBusinessId);
-  const { entries: invoiceLog } = useInvoiceLog(effectiveBusinessId);
-  const { suggestions: reorderSuggestions } = useReorderSuggestions(effectiveBusinessId);
-
-  function exitImpersonation() {
-    localStorage.removeItem('mlaiImpersonating');
-    setImpersonating(null);
-  }
 
   useEffect(() => {
     if (authLoading || bizLoading) return;
     if (!user) router.replace('/login');
-    else if (!business && !impersonating) router.replace('/onboarding');
-  }, [user, business, authLoading, bizLoading, router, impersonating]);
+    else if (!business) router.replace('/onboarding');
+  }, [user, business, authLoading, bizLoading, router]);
 
   const categories = useMemo(() => {
     const cats = new Set(items.map((i) => i.category).filter(Boolean));
@@ -68,11 +41,6 @@ export default function HomePage() {
 
   const lowStock = items.filter((i) => i.stock === 0 || (i.minStock > 0 && i.stock < i.minStock));
 
-  async function handleSignOut() {
-    await signOutUser();
-    router.replace('/login');
-  }
-
   if (authLoading || bizLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -80,43 +48,30 @@ export default function HomePage() {
       </div>
     );
   }
-  const effectiveName = (isOwner && impersonating) ? impersonating.businessName : (business?.name ?? '');
-  const effectiveItemCount = items.length;
-
-  if (!user || (!business && !impersonating)) return null;
+  if (!user || !business) return null;
 
   return (
     <div className="min-h-screen pb-28">
-      {/* Impersonation Banner */}
-      {isOwner && impersonating && (
-        <div className="bg-amber-500 text-white px-4 py-2 text-sm font-medium flex justify-between items-center">
-          <button
-            onClick={exitImpersonation}
-            className="press text-white/80 hover:text-white font-bold text-base leading-none px-1"
-          >
-            ×  יציאה
-          </button>
-          <span>מצב התחזות: {impersonating.businessName}</span>
-        </div>
-      )}
-
       {/* Header */}
       <div className="glass-strong sticky top-0 z-10 px-4 pt-12 pb-3">
         <div className="flex items-center justify-between mb-2 animate-slide-down">
-          {/* RIGHT in RTL: business name */}
-          <div>
-            <p className="text-base font-bold text-gray-900">{effectiveName}</p>
-            <p className="text-xs text-gray-400">{effectiveItemCount} פריטים</p>
-          </div>
-          {/* LEFT in RTL: language + logout */}
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-gray-400 glass rounded-lg px-2 py-1 select-none">עב</span>
             <button
-              onClick={handleSignOut}
-              className="press flex items-center gap-1 text-sm text-gray-500 glass rounded-xl px-3 py-1.5"
+              onClick={() => router.push('/home/stockcount')}
+              className="press px-3 py-1.5 glass rounded-xl text-xs font-medium text-gray-600"
             >
-              יציאה
+              📊 ספירה
             </button>
+            <button
+              onClick={() => router.push('/home/reports')}
+              className="press px-3 py-1.5 glass rounded-xl text-xs font-medium text-gray-600"
+            >
+              📋 דוח
+            </button>
+          </div>
+          <div className="text-right">
+            <p className="text-sm font-medium text-gray-700">{business.name}</p>
+            <p className="text-xs text-gray-400">{items.length} פריטים</p>
           </div>
         </div>
 
@@ -201,7 +156,7 @@ export default function HomePage() {
           </div>
         )}
         {filtered.map((item, i) => (
-          <ItemCard key={item.id} item={item} businessId={effectiveBusinessId ?? ''} index={i} />
+          <ItemCard key={item.id} item={item} businessId={business.id} index={i} />
         ))}
       </div>
 
@@ -239,13 +194,7 @@ export default function HomePage() {
   );
 }
 
-function ReorderCard({
-  suggestion,
-  onTap,
-}: {
-  suggestion: ReorderSuggestion;
-  onTap: () => void;
-}) {
+function ReorderCard({ suggestion, onTap }: { suggestion: ReorderSuggestion; onTap: () => void }) {
   return (
     <button
       onClick={onTap}

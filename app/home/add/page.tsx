@@ -18,45 +18,48 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export default function AddItemPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const { business } = useBusiness();
-  const router = useRouter();
 
   const [name, setName] = useState('');
   const [category, setCategory] = useState(DEFAULT_CATEGORIES[0]);
   const [unit, setUnit] = useState<ItemUnit>('יחידה');
-  const [stock, setStock] = useState('0');
-  const [minStock, setMinStock] = useState('0');
+  const [stock, setStock] = useState('');
+  const [minStock, setMinStock] = useState('');
   const [price, setPrice] = useState('');
   const [supplier, setSupplier] = useState('');
   const [sku, setSku] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [packSize, setPackSize] = useState('');
+  const [minOrder, setMinOrder] = useState('');
+  const [deliveryDays, setDeliveryDays] = useState('');
+  const [targetStock, setTargetStock] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   async function handleSave() {
-    if (!name.trim()) { setError('נא להזין שם פריט'); return; }
-    if (!user || !business) return;
-    setLoading(true);
-    setError('');
-    try {
-      await addItem(business.id, {
-        name: name.trim(), category, unit,
-        stock: parseFloat(stock) || 0,
-        minStock: parseFloat(minStock) || 0,
-        price: parseFloat(price) || 0,
-        supplier: supplier.trim(),
-        sku: sku.trim(),
-      });
-      router.back();
-    } catch {
-      setError('שגיאה בשמירה, נסה שוב');
-      setLoading(false);
-    }
+    if (!business || !user || !name.trim()) return;
+    setSaving(true);
+    await addItem(business.id, {
+      name: name.trim(),
+      category,
+      unit,
+      stock: parseFloat(stock) || 0,
+      minStock: parseFloat(minStock) || 0,
+      price: parseFloat(price) || 0,
+      supplier: supplier.trim(),
+      sku: sku.trim(),
+      packSize: packSize ? parseFloat(packSize) : undefined,
+      minOrder: minOrder ? parseFloat(minOrder) : undefined,
+      deliveryDays: deliveryDays ? parseInt(deliveryDays) : undefined,
+      targetStock: targetStock ? parseFloat(targetStock) : undefined,
+    });
+    setSaving(false);
+    router.back();
   }
 
   return (
     <div className="min-h-screen pb-28">
-      {/* Header */}
       <div className="glass-strong sticky top-0 z-10 px-4 pt-12 pb-4 flex items-center gap-3 animate-slide-down">
         <button
           onClick={() => router.back()}
@@ -71,8 +74,14 @@ export default function AddItemPage() {
         {/* Name */}
         <div className="glass rounded-3xl p-4">
           <Field label="שם פריט *">
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)}
-              placeholder='למשל: "אבוקדו"' className={inputCls} autoFocus />
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="לחם, עגבניות..."
+              className={inputCls}
+              autoFocus
+            />
           </Field>
         </div>
 
@@ -81,12 +90,15 @@ export default function AddItemPage() {
           <Field label="קטגוריה">
             <div className="flex flex-wrap gap-2 justify-end mt-1">
               {DEFAULT_CATEGORIES.map((c) => (
-                <button key={c} onClick={() => setCategory(c)}
+                <button
+                  key={c}
+                  onClick={() => setCategory(c)}
                   className={`press px-3 py-1.5 rounded-xl text-sm border transition-all duration-200 ${
                     category === c
                       ? 'bg-gray-900 text-white border-gray-900 shadow-md shadow-gray-900/15'
                       : 'bg-white/70 border-gray-200 text-gray-600'
-                  }`}>
+                  }`}
+                >
                   {c}
                 </button>
               ))}
@@ -94,7 +106,7 @@ export default function AddItemPage() {
           </Field>
         </div>
 
-        {/* Unit + Stock */}
+        {/* Main fields */}
         <div className="glass rounded-3xl p-4 space-y-4">
           <Field label="יחידת מידה">
             <select value={unit} onChange={(e) => setUnit(e.target.value as ItemUnit)} className={inputCls}>
@@ -103,46 +115,70 @@ export default function AddItemPage() {
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="כמות נוכחית">
-              <input type="number" inputMode="decimal" value={stock} onChange={(e) => setStock(e.target.value)} className={inputCls} />
+              <input type="number" inputMode="decimal" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="0" className={inputCls} />
             </Field>
-            <Field label="מינימום">
-              <input type="number" inputMode="decimal" value={minStock} onChange={(e) => setMinStock(e.target.value)} className={inputCls} />
+            <Field label="מינ׳ התראה">
+              <input type="number" inputMode="decimal" value={minStock} onChange={(e) => setMinStock(e.target.value)} placeholder="0" className={inputCls} />
             </Field>
           </div>
-        </div>
-
-        {/* Price + SKU + Supplier */}
-        <div className="glass rounded-3xl p-4 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <Field label='מחיר (₪)'>
               <input type="number" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" className={inputCls} />
             </Field>
-            <Field label='מק"ט'>
-              <input type="text" value={sku} onChange={(e) => setSku(e.target.value)} placeholder="אופציונלי" className={inputCls} />
+            <Field label="ספק">
+              <input type="text" value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="שם הספק" className={inputCls} />
             </Field>
           </div>
-          <Field label="ספק">
-            <input type="text" value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="שם הספק" className={inputCls} />
+          <Field label='מק"ט'>
+            <input type="text" value={sku} onChange={(e) => setSku(e.target.value)} placeholder="אופציונלי" className={inputCls} />
           </Field>
         </div>
 
-        {error && (
-          <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 text-sm text-red-600 text-right animate-fade-in">
-            {error}
-          </div>
-        )}
+        {/* Advanced settings collapsible */}
+        <div className="glass rounded-3xl overflow-hidden">
+          <button
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="press w-full flex items-center justify-between p-4 text-right"
+          >
+            <span className="text-indigo-500 text-sm">{showAdvanced ? '▲' : '▼'}</span>
+            <span className="text-sm font-medium text-gray-700">הגדרות מתקדמות</span>
+          </button>
+          {showAdvanced && (
+            <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
+              <div className="grid grid-cols-2 gap-3 mt-4">
+                <Field label="מלאי תקן">
+                  <input type="number" inputMode="decimal" value={targetStock} onChange={(e) => setTargetStock(e.target.value)} placeholder="יעד מלאי" className={inputCls} />
+                </Field>
+                <Field label="כמות במארז">
+                  <input type="number" inputMode="decimal" value={packSize} onChange={(e) => setPackSize(e.target.value)} placeholder="יח׳ במארז" className={inputCls} />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="מינ׳ הזמנה">
+                  <input type="number" inputMode="decimal" value={minOrder} onChange={(e) => setMinOrder(e.target.value)} placeholder="כמות מינ׳" className={inputCls} />
+                </Field>
+                <Field label="ימי אספקה">
+                  <input type="number" inputMode="numeric" value={deliveryDays} onChange={(e) => setDeliveryDays(e.target.value)} placeholder="ימים" className={inputCls} />
+                </Field>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Save button */}
+      {/* Save */}
       <div className="glass-nav fixed bottom-0 right-0 left-0 p-4">
-        <button onClick={handleSave} disabled={loading}
-          className="press w-full bg-gradient-to-br from-gray-900 to-gray-800 text-white py-4 rounded-2xl font-medium text-base shadow-lg shadow-gray-900/20 disabled:opacity-50">
-          {loading ? (
+        <button
+          onClick={handleSave}
+          disabled={saving || !name.trim()}
+          className="press w-full bg-gradient-to-br from-gray-900 to-gray-800 text-white py-4 rounded-2xl font-medium text-base shadow-lg shadow-gray-900/20 disabled:opacity-50"
+        >
+          {saving ? (
             <span className="flex items-center justify-center gap-2">
               <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin-smooth" />
               שומר...
             </span>
-          ) : 'שמור פריט'}
+          ) : '+ הוסף פריט'}
         </button>
       </div>
     </div>
