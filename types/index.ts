@@ -118,6 +118,7 @@ export interface SupplierDetails {
   name: string;
   phone?: string;
   email?: string;
+  contactPerson?: string;
   deliveryDays?: number;
   notes?: string;
   updatedAt?: Date;

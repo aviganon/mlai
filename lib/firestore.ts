@@ -200,6 +200,11 @@ export function subscribeToReorderSuggestions(
 
 // ─── Supplier Details ─────────────────────────────────────────
 
+export async function getAllSupplierDetails(businessId: string): Promise<SupplierDetails[]> {
+  const snap = await getDocs(collection(db, 'businesses', businessId, 'supplierDetails'));
+  return snap.docs.map((d) => d.data() as SupplierDetails);
+}
+
 export async function getSupplierDetails(
   businessId: string,
   supplierName: string

@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { useBusiness } from '@/hooks/useBusiness';
 import { useItems } from '@/hooks/useItems';
-import { getSupplierDetails, saveSupplierDetails } from '@/lib/firestore';
+import { getAllSupplierDetails, getSupplierDetails, saveSupplierDetails } from '@/lib/firestore';
 import { BottomNav } from '@/components/BottomNav';
 import { InventoryItem, SupplierDetails } from '@/types';
 
@@ -38,11 +38,28 @@ export default function SuppliersPage() {
   const [editNotes, setEditNotes] = useState('');
   const [savingDetails, setSavingDetails] = useState(false);
 
+  // All supplier details docs (for suppliers with no items yet)
+  const [allSupplierDetails, setAllSupplierDetails] = useState<SupplierDetails[]>([]);
+
+  // New supplier modal state
+  const [showNewModal, setShowNewModal] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newContact, setNewContact] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [newNameError, setNewNameError] = useState(false);
+
   useEffect(() => {
     if (authLoading || bizLoading) return;
     if (!user) router.replace('/login');
     else if (!business) router.replace('/onboarding');
   }, [user, business, authLoading, bizLoading, router]);
+
+  useEffect(() => {
+    if (!business) return;
+    getAllSupplierDetails(business.id).then(setAllSupplierDetails);
+  }, [business]);
 
   useEffect(() => {
     if (!selectedSupplier || !business) return;
@@ -63,6 +80,12 @@ export default function SuppliersPage() {
       list.push(item);
       map.set(name, list);
     });
+    // Include suppliers from supplierDetails that have no items yet
+    allSupplierDetails.forEach((sd) => {
+      if (sd.name && !map.has(sd.name)) {
+        map.set(sd.name, []);
+      }
+    });
     return Array.from(map.entries())
       .map(([name, its]) => ({
         name,
@@ -72,7 +95,7 @@ export default function SuppliersPage() {
         ).length,
       }))
       .sort((a, b) => b.items.length - a.items.length);
-  }, [items]);
+  }, [items, allSupplierDetails]);
 
   const filteredSuppliers = useMemo(() => {
     if (!search.trim()) return suppliers;
@@ -100,6 +123,29 @@ export default function SuppliersPage() {
     });
     setSavingDetails(false);
     setShowDetails(false);
+  }
+
+  async function handleCreateSupplier() {
+    if (!business) return;
+    if (!newName.trim()) { setNewNameError(true); return; }
+    setCreating(true);
+    await saveSupplierDetails(business.id, newName.trim(), {
+      phone: newPhone.trim() || undefined,
+      email: newEmail.trim() || undefined,
+      contactPerson: newContact.trim() || undefined,
+    });
+    const details = await getAllSupplierDetails(business.id);
+    setAllSupplierDetails(details);
+    setCreating(false);
+    setShowNewModal(false);
+    setNewName(''); setNewPhone(''); setNewEmail(''); setNewContact('');
+    setNewNameError(false);
+  }
+
+  function openNewModal() {
+    setNewName(''); setNewPhone(''); setNewEmail(''); setNewContact('');
+    setNewNameError(false);
+    setShowNewModal(true);
   }
 
   if (authLoading || bizLoading) {
@@ -133,11 +179,22 @@ export default function SuppliersPage() {
               {selectedSupplier ?? 'ספקים'}
             </h1>
           </div>
-          <p className="text-xs text-gray-400">
-            {selectedSupplier
-              ? `${activeGroup?.items.length ?? 0} פריטים`
-              : `${suppliers.length} ספקים`}
-          </p>
+          <div className="flex items-center gap-2">
+            {!selectedSupplier && (
+              <button
+                onClick={openNewModal}
+                className="press flex items-center gap-1.5 bg-gradient-to-r from-indigo-500 to-violet-600 text-white text-xs font-semibold px-3 py-1.5 rounded-xl shadow-sm"
+              >
+                <span className="text-sm leading-none">+</span>
+                <span>ספק חדש</span>
+              </button>
+            )}
+            <p className="text-xs text-gray-400">
+              {selectedSupplier
+                ? `${activeGroup?.items.length ?? 0} פריטים`
+                : `${suppliers.length} ספקים`}
+            </p>
+          </div>
         </div>
 
         {!selectedSupplier && (
@@ -264,7 +321,7 @@ export default function SuppliersPage() {
               </p>
               {!search && (
                 <p className="text-xs text-gray-300 mt-2">
-                  הוסף פריטים עם שם ספק כדי לראות אותם כאן
+                  לחץ על &ldquo;+ ספק חדש&rdquo; להוספה ידנית, או הוסף פריטים עם שם ספק
                 </p>
               )}
             </div>
@@ -302,6 +359,93 @@ export default function SuppliersPage() {
               <span className="text-gray-300 text-sm flex-shrink-0">‹</span>
             </button>
           ))}
+        </div>
+      )}
+
+      {/* New Supplier Modal */}
+      {showNewModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowNewModal(false); }}
+        >
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setShowNewModal(false)} />
+          <div className="relative w-full max-w-lg glass-strong rounded-t-3xl px-5 pt-5 pb-10 animate-slide-up shadow-2xl">
+            {/* Handle */}
+            <div className="w-10 h-1 rounded-full bg-gray-300 mx-auto mb-5" />
+
+            <div className="flex items-center justify-between mb-5">
+              <button
+                onClick={() => setShowNewModal(false)}
+                className="press w-8 h-8 rounded-xl glass flex items-center justify-center text-gray-400 text-sm"
+              >
+                ✕
+              </button>
+              <h2 className="text-lg font-bold text-gray-900">ספק חדש</h2>
+              <div className="w-8" />
+            </div>
+
+            <div className="space-y-3" dir="rtl">
+              {/* Supplier name */}
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">שם ספק *</label>
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => { setNewName(e.target.value); setNewNameError(false); }}
+                  placeholder="לדוגמה: תוצרת הגליל"
+                  className={`${inputCls} ${newNameError ? 'ring-2 ring-red-300 border-red-300' : ''}`}
+                  autoFocus
+                />
+                {newNameError && (
+                  <p className="text-xs text-red-400 mt-1 text-right">שם ספק הוא שדה חובה</p>
+                )}
+              </div>
+
+              {/* Phone + Email */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">טלפון</label>
+                  <input
+                    type="tel"
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                    placeholder="050-..."
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">אימייל</label>
+                  <input
+                    type="email"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    placeholder="mail@..."
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+
+              {/* Contact person */}
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">איש קשר</label>
+                <input
+                  type="text"
+                  value={newContact}
+                  onChange={(e) => setNewContact(e.target.value)}
+                  placeholder="שם איש הקשר"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleCreateSupplier}
+              disabled={creating}
+              className="press mt-5 w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white py-3 rounded-2xl text-sm font-semibold shadow-md disabled:opacity-50"
+            >
+              {creating ? 'יוצר ספק...' : '+ הוסף ספק'}
+            </button>
+          </div>
         </div>
       )}
 
