@@ -5,6 +5,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { useIsOwner } from '@/hooks/useIsOwner';
 import { getAllBusinesses, adminDeleteBusiness, adminUpdateBusiness } from '@/lib/firestore';
 import { getAllUsers } from '@/lib/users';
+import { setUserOwner } from '@/lib/userOwner';
 import { Business, MlaiUser } from '@/types';
 
 function isOnline(lastSeen: unknown): boolean {
@@ -52,6 +53,11 @@ export default function AdminPage() {
     setConfirmDelete(null);
     const updatedUsers = users.map((u) => u.businessId === id ? { ...u, businessId: null } : u);
     setUsers(updatedUsers);
+  }
+
+  async function handleSetOwner(uid: string, isOwner: boolean) {
+    await setUserOwner(uid, isOwner);
+    setUsers((prev) => prev.map((u) => u.uid === uid ? { ...u, isOwner } : u));
   }
 
   async function handleSaveName(id: string) {
@@ -161,9 +167,30 @@ export default function AdminPage() {
               <p className="text-sm font-medium text-gray-900 truncate">{u.displayName ?? u.email}</p>
               <p className="text-xs text-gray-400 truncate">{u.email}</p>
             </div>
-            <div className="text-right flex-shrink-0">
-              <p className="text-xs text-gray-500">{formatLastSeen(u.lastSeen)}</p>
-              {u.isOwner && <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full font-medium">בעלים</span>}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="text-right">
+                <p className="text-xs text-gray-500">{formatLastSeen(u.lastSeen)}</p>
+                {u.isOwner && (
+                  <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full font-medium">בעלים</span>
+                )}
+              </div>
+              {u.isOwner && u.uid === user?.uid ? (
+                <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded-lg font-medium">אתה</span>
+              ) : u.isOwner ? (
+                <button
+                  onClick={() => handleSetOwner(u.uid, false)}
+                  className="press px-2 py-1 text-xs rounded-lg bg-red-50 text-red-500 border border-red-100"
+                >
+                  הסר בעלות
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleSetOwner(u.uid, true)}
+                  className="press px-2 py-1 text-xs rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200"
+                >
+                  הפוך לבעלים
+                </button>
+              )}
             </div>
           </div>
         ))}
