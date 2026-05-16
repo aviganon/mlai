@@ -7,7 +7,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { useBusiness } from '@/hooks/useBusiness';
 import { useIsOwner } from '@/hooks/useIsOwner';
 import { signOutUser } from '@/lib/auth';
-import { getAllBusinesses, adminDeleteBusiness, adminUpdateBusiness, updateBusinessInvoiceEmail } from '@/lib/firestore';
+import { getAllBusinesses, adminDeleteBusiness, adminUpdateBusiness, updateBusinessInvoiceEmail, updateBusinessSalesEmail } from '@/lib/firestore';
 import { createBusiness, createPendingUser, addPendingMember } from '@/lib/adminFirestore';
 import { getAllUsers } from '@/lib/users';
 import { setUserOwner } from '@/lib/userOwner';
@@ -56,7 +56,9 @@ export default function SettingsPage() {
   // Business detail panel
   const [selectedBiz, setSelectedBiz] = useState<Business | null>(null);
   const [panelInvoiceEmail, setPanelInvoiceEmail] = useState('');
+  const [panelSalesEmail, setPanelSalesEmail] = useState('');
   const [savingEmail, setSavingEmail] = useState(false);
+  const [savingSalesEmail, setSavingSalesEmail] = useState(false);
   const [panelEditName, setPanelEditName] = useState('');
   const [panelEditingName, setPanelEditingName] = useState(false);
   const [panelConfirmDelete, setPanelConfirmDelete] = useState(false);
@@ -221,6 +223,7 @@ export default function SettingsPage() {
   function openBizPanel(biz: Business) {
     setSelectedBiz(biz);
     setPanelInvoiceEmail(biz.invoiceEmail ?? '');
+    setPanelSalesEmail(biz.salesEmail ?? '');
     setPanelEditName(biz.name);
     setPanelEditingName(false);
     setPanelConfirmDelete(false);
@@ -235,6 +238,17 @@ export default function SettingsPage() {
     );
     setSelectedBiz((b) => b ? { ...b, invoiceEmail: panelInvoiceEmail.trim() } : b);
     setSavingEmail(false);
+  }
+
+  async function handleSaveSalesEmail() {
+    if (!selectedBiz) return;
+    setSavingSalesEmail(true);
+    await updateBusinessSalesEmail(selectedBiz.id, panelSalesEmail.trim());
+    setBusinesses((prev) =>
+      prev.map((b) => b.id === selectedBiz.id ? { ...b, salesEmail: panelSalesEmail.trim() } : b)
+    );
+    setSelectedBiz((b) => b ? { ...b, salesEmail: panelSalesEmail.trim() } : b);
+    setSavingSalesEmail(false);
   }
 
   async function handlePanelSaveName() {
@@ -1008,16 +1022,18 @@ export default function SettingsPage() {
                   )}
                 </div>
 
-                {/* Invoice email section */}
-                <div className="glass rounded-2xl p-4 space-y-3">
-                  <div className="text-right">
-                    <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">חשבוניות במייל</p>
-                    <p className="text-xs text-gray-400 mt-1 leading-relaxed">
-                      שלח חשבוניות ספקים לכתובת זו — המערכת תעדכן את המלאי אוטומטית
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">כתובת מייל לחשבוניות</label>
+                {/* Email section */}
+                <div className="glass rounded-2xl p-4 space-y-4">
+                  <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">חשבוניות במייל</p>
+
+                  {/* Field 1 — חשבוניות ספקים */}
+                  <div className="space-y-2">
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-gray-800">📦 חשבוניות ספקים</p>
+                      <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
+                        שלח חשבוניות ספקים לכתובת זו — המלאי יעלה אוטומטית
+                      </p>
+                    </div>
                     <input
                       type="email"
                       value={panelInvoiceEmail}
@@ -1026,14 +1042,41 @@ export default function SettingsPage() {
                       className="w-full bg-white/70 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 transition-all"
                       dir="ltr"
                     />
+                    <button
+                      onClick={handleSaveInvoiceEmail}
+                      disabled={savingEmail}
+                      className="press w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white py-2.5 rounded-xl text-sm font-semibold shadow-md disabled:opacity-50"
+                    >
+                      {savingEmail ? 'שומר...' : 'שמור'}
+                    </button>
                   </div>
-                  <button
-                    onClick={handleSaveInvoiceEmail}
-                    disabled={savingEmail}
-                    className="press w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white py-2.5 rounded-xl text-sm font-semibold shadow-md disabled:opacity-50"
-                  >
-                    {savingEmail ? 'שומר...' : 'שמור כתובת מייל'}
-                  </button>
+
+                  <div className="border-t border-gray-100" />
+
+                  {/* Field 2 — דוחות מכירות */}
+                  <div className="space-y-2">
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-gray-800">🛒 דוחות מכירות</p>
+                      <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
+                        שלח דוחות מכירות לכתובת זו — המלאי ירד אוטומטית
+                      </p>
+                    </div>
+                    <input
+                      type="email"
+                      value={panelSalesEmail}
+                      onChange={(e) => setPanelSalesEmail(e.target.value)}
+                      placeholder="sales@example.com"
+                      className="w-full bg-white/70 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 transition-all"
+                      dir="ltr"
+                    />
+                    <button
+                      onClick={handleSaveSalesEmail}
+                      disabled={savingSalesEmail}
+                      className="press w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white py-2.5 rounded-xl text-sm font-semibold shadow-md disabled:opacity-50"
+                    >
+                      {savingSalesEmail ? 'שומר...' : 'שמור'}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Manage / impersonate */}

@@ -81,6 +81,14 @@ export async function updateBusinessInvoiceEmail(businessId: string, email: stri
   );
 }
 
+export async function updateBusinessSalesEmail(businessId: string, email: string): Promise<void> {
+  await setDoc(
+    doc(db, 'businesses', businessId),
+    { salesEmail: email },
+    { merge: true }
+  );
+}
+
 // ─── Business ────────────────────────────────────────────────
 
 export async function getBusinessById(businessId: string): Promise<Business | null> {

@@ -10,6 +10,7 @@ export interface Business {
   ownerId: string;
   createdAt: Date;
   invoiceEmail?: string;
+  salesEmail?: string;
 }
 
 export interface InventoryItem {
