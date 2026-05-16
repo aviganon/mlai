@@ -6,7 +6,7 @@ import { useBusiness } from '@/hooks/useBusiness';
 import { useIsOwner } from '@/hooks/useIsOwner';
 import { signOutUser } from '@/lib/auth';
 import { getAllBusinesses, adminDeleteBusiness, adminUpdateBusiness } from '@/lib/firestore';
-import { createBusiness, createPendingUser } from '@/lib/adminFirestore';
+import { createBusiness, createPendingUser, addPendingMember } from '@/lib/adminFirestore';
 import { getAllUsers } from '@/lib/users';
 import { setUserOwner } from '@/lib/userOwner';
 import { BottomNav } from '@/components/BottomNav';
@@ -57,8 +57,14 @@ export default function SettingsPage() {
   // Add User form
   const [showAddUser, setShowAddUser] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserDisplayName, setNewUserDisplayName] = useState('');
+  const [newUserRole, setNewUserRole] = useState<'owner' | 'employee'>('employee');
+  const [newUserBusinessId, setNewUserBusinessId] = useState<string>('');
+  const [newUserIsOwner, setNewUserIsOwner] = useState(false);
   const [addUserLoading, setAddUserLoading] = useState(false);
   const [addUserSuccess, setAddUserSuccess] = useState(false);
+  const [inviteLink, setInviteLink] = useState('');
+  const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
     if (authLoading || ownerLoading) return;
@@ -127,25 +133,42 @@ export default function SettingsPage() {
 
   async function handleAddUser(e: React.FormEvent) {
     e.preventDefault();
-    if (!newUserEmail.trim()) return;
+    if (!newUserEmail.trim() || !newUserDisplayName.trim()) return;
     setAddUserLoading(true);
     try {
-      const uid = await createPendingUser(newUserEmail.trim());
+      const uid = await createPendingUser({
+        email: newUserEmail.trim(),
+        displayName: newUserDisplayName.trim(),
+        role: newUserRole,
+        businessId: newUserBusinessId || null,
+        isOwner: newUserIsOwner,
+      });
+      if (newUserBusinessId && newUserRole === 'employee') {
+        await addPendingMember(newUserBusinessId, newUserEmail.trim());
+      }
       const newUser: MlaiUser = {
         uid,
         email: newUserEmail.trim(),
-        displayName: newUserEmail.trim().split('@')[0],
-        isOwner: false,
-        businessId: null,
-        role: 'owner',
+        displayName: newUserDisplayName.trim(),
+        isOwner: newUserIsOwner,
+        businessId: newUserBusinessId || null,
+        role: newUserRole,
       } as MlaiUser;
       setUsers((prev) => [newUser, ...prev]);
+      const link = `https://mlai.galis.app/join?email=${encodeURIComponent(newUserEmail.trim())}`;
+      setInviteLink(link);
       setAddUserSuccess(true);
-      setNewUserEmail('');
       setTimeout(() => {
         setAddUserSuccess(false);
+        setInviteLink('');
+        setLinkCopied(false);
         setShowAddUser(false);
-      }, 2500);
+        setNewUserEmail('');
+        setNewUserDisplayName('');
+        setNewUserRole('employee');
+        setNewUserBusinessId('');
+        setNewUserIsOwner(false);
+      }, 5000);
     } finally {
       setAddUserLoading(false);
     }
@@ -391,30 +414,92 @@ export default function SettingsPage() {
                       </div>
 
                       {addUserSuccess ? (
-                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center animate-scale-in">
-                          <p className="text-sm text-emerald-700 font-medium">✅ המשתמש נוצר בהצלחה</p>
+                        <div className="space-y-3 animate-scale-in">
+                          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
+                            <p className="text-sm text-emerald-700 font-medium">✅ המשתמש נוצר בהצלחה</p>
+                          </div>
+                          <div className="bg-white/80 border border-gray-200 rounded-xl p-3 space-y-2">
+                            <p className="text-xs text-gray-500 font-medium text-right">קישור הזמנה:</p>
+                            <p className="text-xs text-indigo-600 break-all text-right font-mono bg-indigo-50 rounded-lg px-2 py-1.5 select-all">{inviteLink}</p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(inviteLink);
+                                setLinkCopied(true);
+                              }}
+                              className="press w-full py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold"
+                            >
+                              {linkCopied ? '✅ הועתק!' : '📋 העתק קישור'}
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <>
-                          <input
-                            required
-                            type="email"
-                            value={newUserEmail}
-                            onChange={(e) => setNewUserEmail(e.target.value)}
-                            placeholder="כתובת אימייל"
-                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white/70"
-                          />
+                          <div className="space-y-2">
+                            <input
+                              required
+                              type="text"
+                              value={newUserDisplayName}
+                              onChange={(e) => setNewUserDisplayName(e.target.value)}
+                              placeholder="שם מלא *"
+                              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white/70"
+                            />
+                            <input
+                              required
+                              type="email"
+                              value={newUserEmail}
+                              onChange={(e) => setNewUserEmail(e.target.value)}
+                              placeholder="כתובת אימייל *"
+                              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white/70"
+                            />
+                            <select
+                              value={newUserRole}
+                              onChange={(e) => setNewUserRole(e.target.value as 'owner' | 'employee')}
+                              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white/70 appearance-none"
+                              dir="rtl"
+                            >
+                              <option value="owner">בעלים</option>
+                              <option value="employee">עובד</option>
+                            </select>
+                            <select
+                              value={newUserBusinessId}
+                              onChange={(e) => setNewUserBusinessId(e.target.value)}
+                              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white/70 appearance-none"
+                              dir="rtl"
+                            >
+                              <option value="">ללא שיוך לעסק</option>
+                              {businesses.map((biz) => (
+                                <option key={biz.id} value={biz.id}>{biz.name}</option>
+                              ))}
+                            </select>
+                            <label className="flex items-center justify-between gap-3 px-3 py-2.5 bg-white/70 border border-gray-200 rounded-xl cursor-pointer">
+                              <span className="text-sm text-gray-700">הרשאות בעלים במערכת</span>
+                              <input
+                                type="checkbox"
+                                checked={newUserIsOwner}
+                                onChange={(e) => setNewUserIsOwner(e.target.checked)}
+                                className="w-4 h-4 accent-indigo-600 rounded"
+                              />
+                            </label>
+                          </div>
                           <div className="flex gap-2">
                             <button
                               type="button"
-                              onClick={() => { setShowAddUser(false); setNewUserEmail(''); }}
+                              onClick={() => {
+                                setShowAddUser(false);
+                                setNewUserEmail('');
+                                setNewUserDisplayName('');
+                                setNewUserRole('employee');
+                                setNewUserBusinessId('');
+                                setNewUserIsOwner(false);
+                              }}
                               className="press flex-1 py-2.5 rounded-xl glass text-xs text-gray-600"
                             >
                               ביטול
                             </button>
                             <button
                               type="submit"
-                              disabled={addUserLoading || !newUserEmail.trim()}
+                              disabled={addUserLoading || !newUserEmail.trim() || !newUserDisplayName.trim()}
                               className="press flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-semibold disabled:opacity-50"
                             >
                               {addUserLoading ? '...' : 'צור פרופיל'}

@@ -1,4 +1,4 @@
-import { addDoc, collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 
 export async function createBusiness(data: {
@@ -16,17 +16,29 @@ export async function createBusiness(data: {
   return ref.id;
 }
 
-export async function createPendingUser(email: string): Promise<string> {
+export async function createPendingUser(data: {
+  email: string;
+  displayName: string;
+  role: 'owner' | 'employee';
+  businessId: string | null;
+  isOwner: boolean;
+}): Promise<string> {
   const uid = `pending-${Date.now()}`;
   await setDoc(doc(db, 'mlaiUsers', uid), {
-    email,
-    displayName: email.split('@')[0],
-    isOwner: false,
-    businessId: null,
-    role: 'owner',
+    uid,
+    email: data.email,
+    displayName: data.displayName,
+    role: data.role,
+    businessId: data.businessId,
+    isOwner: data.isOwner,
     lastSeen: serverTimestamp(),
     createdAt: serverTimestamp(),
-    uid,
   });
   return uid;
+}
+
+export async function addPendingMember(businessId: string, email: string): Promise<void> {
+  await updateDoc(doc(db, 'businesses', businessId), {
+    pendingMembers: arrayUnion(email),
+  });
 }
