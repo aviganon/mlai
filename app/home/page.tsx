@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { useBusiness } from '@/hooks/useBusiness';
+import { useIsOwner } from '@/hooks/useIsOwner';
 import { useItems } from '@/hooks/useItems';
 import { useInvoiceLog } from '@/hooks/useInvoiceLog';
 import { useReorderSuggestions } from '@/hooks/useReorderSuggestions';
@@ -13,6 +14,7 @@ import { DEFAULT_CATEGORIES, InvoiceLogEntry, ReorderSuggestion } from '@/types'
 export default function HomePage() {
   const { user, loading: authLoading } = useAuth();
   const { business, loading: bizLoading } = useBusiness();
+  const { isOwner, loading: ownerLoading } = useIsOwner();
   const { items, loading: itemsLoading } = useItems(business?.id ?? null);
   const { entries: invoiceLog } = useInvoiceLog(business?.id ?? null);
   const { suggestions: reorderSuggestions } = useReorderSuggestions(business?.id ?? null);
@@ -21,10 +23,12 @@ export default function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState('הכל');
 
   useEffect(() => {
-    if (authLoading || bizLoading) return;
+    if (authLoading || bizLoading || ownerLoading) return;
     if (!user) router.replace('/login');
-    else if (!business) router.replace('/onboarding');
-  }, [user, business, authLoading, bizLoading, router]);
+    // Only redirect to onboarding for non-owners — owners without a business should
+    // select one from settings instead of being sent to create a new one.
+    else if (!business && !isOwner) router.replace('/onboarding');
+  }, [user, business, isOwner, authLoading, bizLoading, ownerLoading, router]);
 
   const categories = useMemo(() => {
     const cats = new Set(items.map((i) => i.category).filter(Boolean));
@@ -41,14 +45,36 @@ export default function HomePage() {
 
   const lowStock = items.filter((i) => i.stock === 0 || (i.minStock > 0 && i.stock < i.minStock));
 
-  if (authLoading || bizLoading) {
+  if (authLoading || bizLoading || ownerLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="w-8 h-8 rounded-full border-2 border-indigo-200 border-t-indigo-500 animate-spin-smooth" />
       </div>
     );
   }
-  if (!user || !business) return null;
+  if (!user) return null;
+
+  // Owner with no business selected — prompt them to pick one from settings
+  if (isOwner && !business) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center pb-28 px-6 gap-5 text-center">
+        <div className="text-5xl">🏪</div>
+        <div>
+          <p className="text-lg font-bold text-gray-900 mb-1">אין עסק פעיל</p>
+          <p className="text-sm text-gray-500">בחר עסק לניהול מהגדרות</p>
+        </div>
+        <button
+          onClick={() => router.push('/settings')}
+          className="press bg-gray-900 text-white px-6 py-3 rounded-2xl text-sm font-medium shadow-lg shadow-gray-900/15"
+        >
+          עבור להגדרות
+        </button>
+        <BottomNav />
+      </div>
+    );
+  }
+
+  if (!business) return null;
 
   return (
     <div className="min-h-screen pb-28">

@@ -1,6 +1,6 @@
 'use client';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { useBusiness } from '@/hooks/useBusiness';
 import { useItems } from '@/hooks/useItems';
@@ -26,7 +26,20 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export default function AddItemPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-indigo-200 border-t-indigo-500 animate-spin-smooth" />
+      </div>
+    }>
+      <AddItemForm />
+    </Suspense>
+  );
+}
+
+function AddItemForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const { business } = useBusiness();
   const { items } = useItems(business?.id ?? null);
@@ -45,6 +58,11 @@ export default function AddItemPage() {
   const [targetStock, setTargetStock] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const supplierParam = searchParams.get('supplier');
+    if (supplierParam) setSupplier(supplierParam);
+  }, [searchParams]);
 
   async function handleSave() {
     if (!business || !user || !name.trim()) return;

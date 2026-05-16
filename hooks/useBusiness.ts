@@ -1,55 +1,42 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/components/AuthProvider';
-import { getUserBusiness } from '@/lib/firestore';
-import { createOrUpdateUser, updateLastSeen } from '@/lib/users';
-import { Business } from '@/types';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { useAuth } from '@/components/AuthProvider';
+import { getUserBusiness, getBusinessById } from '@/lib/firestore';
+import { Business } from '@/types';
 
-export function useBusiness() {
+export function useBusiness(): { business: Business | null; loading: boolean } {
   const { user, loading: authLoading } = useAuth();
   const [business, setBusiness] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user) { setLoading(false); return; }
+    if (!user) { setBusiness(null); setLoading(false); return; }
+    setLoading(true);
 
-    async function load() {
-      if (!user) return;
-      // Track user profile + lastSeen
-      createOrUpdateUser(user).catch(() => {});
+    const impersonateId = typeof window !== 'undefined'
+      ? localStorage.getItem('impersonateBusinessId') : null;
 
-      // First: business where user is owner
-      let biz = await getUserBusiness(user.uid);
-
-      // Fallback: business where user is a member (employee)
-      if (!biz) {
-        const snap = await getDocs(
-          query(collection(db, 'businesses'), where(`members.${user.uid}.role`, 'in', ['owner', 'employee']))
-        );
-        if (!snap.empty) {
-          const d = snap.docs[0];
-          biz = { id: d.id, ...d.data() } as Business;
-        }
-      }
-
-      setBusiness(biz);
-      setLoading(false);
+    if (impersonateId) {
+      getBusinessById(impersonateId)
+        .then((biz) => { setBusiness(biz); setLoading(false); })
+        .catch(() => { setBusiness(null); setLoading(false); });
+      return;
     }
 
-    load();
+    getDoc(doc(db, 'mlaiUsers', user.uid)).then(async (snap) => {
+      const profileBusinessId = snap.exists()
+        ? (snap.data()?.businessId as string | null | undefined) : null;
+      if (profileBusinessId) {
+        setBusiness(await getBusinessById(profileBusinessId));
+      } else {
+        setBusiness(await getUserBusiness(user.uid));
+      }
+      setLoading(false);
+    }).catch(() => { setBusiness(null); setLoading(false); });
   }, [user, authLoading]);
 
-  // Update lastSeen every 2 minutes while app is open
-  useEffect(() => {
-    if (!user) return;
-    const interval = setInterval(() => {
-      updateLastSeen(user.uid).catch(() => {});
-    }, 2 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [user]);
-
-  return { business, loading, setBusiness };
+  return { business, loading };
 }

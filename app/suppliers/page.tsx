@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { useBusiness } from '@/hooks/useBusiness';
 import { useItems } from '@/hooks/useItems';
-import { getAllSupplierDetails, getSupplierDetails, saveSupplierDetails } from '@/lib/firestore';
+import { getAllSupplierDetails, getSupplierDetails, saveSupplierDetails, updateItem } from '@/lib/firestore';
 import { BottomNav } from '@/components/BottomNav';
 import { InventoryItem, SupplierDetails } from '@/types';
 
@@ -49,6 +49,12 @@ export default function SuppliersPage() {
   const [newContact, setNewContact] = useState('');
   const [creating, setCreating] = useState(false);
   const [newNameError, setNewNameError] = useState(false);
+
+  // Add existing items modal state
+  const [showAddItemsModal, setShowAddItemsModal] = useState(false);
+  const [itemPickerSearch, setItemPickerSearch] = useState('');
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const [assigningItems, setAssigningItems] = useState(false);
 
   useEffect(() => {
     if (authLoading || bizLoading) return;
@@ -112,6 +118,23 @@ export default function SuppliersPage() {
     [suppliers, selectedSupplier]
   );
 
+  const availableItems = useMemo(() => {
+    if (!selectedSupplier) return [];
+    return items.filter(
+      (item) => !item.supplier || item.supplier.trim() !== selectedSupplier.trim()
+    );
+  }, [items, selectedSupplier]);
+
+  const filteredAvailableItems = useMemo(() => {
+    if (!itemPickerSearch.trim()) return availableItems;
+    const q = itemPickerSearch.trim().toLowerCase();
+    return availableItems.filter(
+      (item) =>
+        item.name.toLowerCase().includes(q) ||
+        item.category.toLowerCase().includes(q)
+    );
+  }, [availableItems, itemPickerSearch]);
+
   const sortedActiveItems = useMemo(() => {
     if (!activeGroup) return [];
     const priority = (item: InventoryItem) => {
@@ -138,8 +161,9 @@ export default function SuppliersPage() {
   async function handleCreateSupplier() {
     if (!business) return;
     if (!newName.trim()) { setNewNameError(true); return; }
+    const createdName = newName.trim();
     setCreating(true);
-    await saveSupplierDetails(business.id, newName.trim(), {
+    await saveSupplierDetails(business.id, createdName, {
       phone: newPhone.trim() || undefined,
       email: newEmail.trim() || undefined,
       contactPerson: newContact.trim() || undefined,
@@ -150,6 +174,27 @@ export default function SuppliersPage() {
     setShowNewModal(false);
     setNewName(''); setNewPhone(''); setNewEmail(''); setNewContact('');
     setNewNameError(false);
+    setSelectedSupplier(createdName);
+  }
+
+  async function handleAssignItems() {
+    if (!business || !selectedSupplier || selectedItemIds.size === 0) return;
+    setAssigningItems(true);
+    await Promise.all(
+      Array.from(selectedItemIds).map((id) =>
+        updateItem(business.id, id, { supplier: selectedSupplier })
+      )
+    );
+    setAssigningItems(false);
+    setShowAddItemsModal(false);
+    setSelectedItemIds(new Set());
+    setItemPickerSearch('');
+  }
+
+  function openAddItemsModal() {
+    setItemPickerSearch('');
+    setSelectedItemIds(new Set());
+    setShowAddItemsModal(true);
   }
 
   function openNewModal() {
@@ -245,6 +290,26 @@ export default function SuppliersPage() {
               }
             />
           </div>
+
+          {/* Add item actions */}
+          {selectedSupplier !== 'ללא ספק' && (
+            <div className="flex gap-2 animate-fade-in">
+              <button
+                onClick={openAddItemsModal}
+                className="press flex-1 glass rounded-2xl p-3 text-sm font-medium text-gray-700 flex items-center justify-center gap-1.5"
+              >
+                <span className="text-base leading-none">📦</span>
+                <span>הוסף פריט קיים</span>
+              </button>
+              <button
+                onClick={() => router.push('/home/add?supplier=' + encodeURIComponent(selectedSupplier))}
+                className="press flex-1 glass rounded-2xl p-3 text-sm font-medium text-gray-700 flex items-center justify-center gap-1.5"
+              >
+                <span className="text-base leading-none">✨</span>
+                <span>צור פריט חדש</span>
+              </button>
+            </div>
+          )}
 
           {/* Supplier details collapsible */}
           {selectedSupplier !== 'ללא ספק' && (
@@ -389,14 +454,10 @@ export default function SuppliersPage() {
       {/* New Supplier Modal */}
       {showNewModal && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center"
+          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
           onClick={(e) => { if (e.target === e.currentTarget) setShowNewModal(false); }}
         >
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setShowNewModal(false)} />
-          <div className="relative w-full max-w-lg glass-strong rounded-t-3xl px-5 pt-5 pb-10 animate-slide-up shadow-2xl">
-            {/* Handle */}
-            <div className="w-10 h-1 rounded-full bg-gray-300 mx-auto mb-5" />
-
+          <div className="glass-strong rounded-3xl p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
               <button
                 onClick={() => setShowNewModal(false)}
@@ -468,6 +529,87 @@ export default function SuppliersPage() {
               className="press mt-5 w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white py-3 rounded-2xl text-sm font-semibold shadow-md disabled:opacity-50"
             >
               {creating ? 'יוצר ספק...' : '+ הוסף ספק'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Add Existing Items Modal */}
+      {showAddItemsModal && selectedSupplier && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowAddItemsModal(false); }}
+        >
+          <div className="glass-strong rounded-3xl p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => setShowAddItemsModal(false)}
+                className="press w-8 h-8 rounded-xl glass flex items-center justify-center text-gray-400 text-sm"
+              >
+                ✕
+              </button>
+              <h2 className="text-base font-bold text-gray-900">הוסף פריט קיים</h2>
+              <div className="w-8" />
+            </div>
+
+            <div className="relative mb-3">
+              <input
+                type="text"
+                value={itemPickerSearch}
+                onChange={(e) => setItemPickerSearch(e.target.value)}
+                placeholder="חיפוש פריט..."
+                className="w-full glass rounded-2xl px-4 py-2.5 text-right text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 pr-10"
+                dir="rtl"
+              />
+              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-300 text-sm">🔍</span>
+            </div>
+
+            {filteredAvailableItems.length === 0 ? (
+              <div className="text-center py-8 text-gray-400 text-sm">
+                {availableItems.length === 0
+                  ? 'כל הפריטים כבר משויכים לספק זה'
+                  : 'לא נמצאו פריטים'}
+              </div>
+            ) : (
+              <div className="space-y-1.5 mb-4" dir="rtl">
+                {filteredAvailableItems.map((item) => {
+                  const checked = selectedItemIds.has(item.id);
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        const next = new Set(selectedItemIds);
+                        if (next.has(item.id)) next.delete(item.id);
+                        else next.add(item.id);
+                        setSelectedItemIds(next);
+                      }}
+                      className={`press w-full flex items-center gap-3 p-3 rounded-2xl text-right transition-all ${
+                        checked ? 'bg-indigo-50 border border-indigo-200' : 'glass border border-transparent'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                        checked ? 'bg-indigo-500 border-indigo-500' : 'border-gray-300 bg-white/60'
+                      }`}>
+                        {checked && <span className="text-white text-xs font-bold">✓</span>}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 truncate text-sm">{item.name}</p>
+                        <p className="text-xs text-gray-400">{item.category}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <button
+              onClick={handleAssignItems}
+              disabled={selectedItemIds.size === 0 || assigningItems}
+              className="press w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white py-3 rounded-2xl text-sm font-semibold shadow-md disabled:opacity-40"
+            >
+              {assigningItems
+                ? 'מוסיף פריטים...'
+                : `הוסף פריטים נבחרים (${selectedItemIds.size})`}
             </button>
           </div>
         </div>

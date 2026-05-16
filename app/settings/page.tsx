@@ -42,6 +42,13 @@ export default function SettingsPage() {
   const [users, setUsers] = useState<MlaiUser[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'businesses' | 'users'>('businesses');
+  const [activeBizId, setActiveBizId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setActiveBizId(localStorage.getItem('impersonateBusinessId'));
+    }
+  }, []);
 
   // Business detail panel
   const [selectedBiz, setSelectedBiz] = useState<Business | null>(null);
@@ -166,10 +173,8 @@ export default function SettingsPage() {
   }
 
   function handleImpersonate(biz: Business) {
-    localStorage.setItem('mlaiImpersonating', JSON.stringify({
-      businessId: biz.id,
-      businessName: biz.name,
-    }));
+    localStorage.setItem('impersonateBusinessId', biz.id);
+    setActiveBizId(biz.id);
     router.push('/home');
   }
 
@@ -353,37 +358,64 @@ export default function SettingsPage() {
 
                   {businesses.map((biz) => {
                     const owner = users.find((u) => u.uid === biz.ownerId);
+                    const isActive = activeBizId === biz.id;
                     return (
-                      <button
+                      <div
                         key={biz.id}
-                        type="button"
-                        onClick={() => openBizPanel(biz)}
-                        className="press w-full glass-strong rounded-3xl p-5 text-right animate-fade-in"
+                        className="w-full glass-strong rounded-3xl p-5 text-right animate-fade-in"
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            {owner && (
-                              <div className={`w-2.5 h-2.5 rounded-full ${isOnline(owner.lastSeen) ? 'bg-emerald-400' : 'bg-gray-300'}`} />
-                            )}
-                            <span className="text-gray-300 text-sm">‹</span>
+                        {/* Tappable info area opens the detail panel */}
+                        <button
+                          type="button"
+                          onClick={() => openBizPanel(biz)}
+                          className="w-full text-right"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {owner && (
+                                <div className={`w-2.5 h-2.5 rounded-full ${isOnline(owner.lastSeen) ? 'bg-emerald-400' : 'bg-gray-300'}`} />
+                              )}
+                              <span className="text-gray-300 text-sm">‹</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 justify-end">
+                                <p className="font-bold text-gray-900 truncate">{biz.name}</p>
+                                {isActive && (
+                                  <span className="flex-shrink-0 text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">פעיל ✓</span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                {(biz as unknown as Record<string, unknown>).domain as string ?? biz.type}
+                              </p>
+                              <p className="text-xs text-gray-400 mt-1 truncate">
+                                {owner?.displayName ?? owner?.email ?? biz.ownerId}
+                              </p>
+                              {biz.invoiceEmail && (
+                                <p className="text-xs text-indigo-400 mt-0.5 truncate">📧 {biz.invoiceEmail}</p>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-bold text-gray-900 truncate">{biz.name}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              {(biz as unknown as Record<string, unknown>).domain as string ?? biz.type}
-                            </p>
-                            <p className="text-xs text-gray-400 mt-1 truncate">
-                              {owner?.displayName ?? owner?.email ?? biz.ownerId}
-                            </p>
-                            {biz.invoiceEmail && (
-                              <p className="text-xs text-indigo-400 mt-0.5 truncate">📧 {biz.invoiceEmail}</p>
-                            )}
-                          </div>
+                        </button>
+
+                        {/* Footer row: last-seen + manage button */}
+                        <div className="flex items-center justify-between mt-3">
+                          {owner
+                            ? <p className="text-xs text-gray-400">{formatLastSeen(owner.lastSeen)}</p>
+                            : <span />
+                          }
+                          <button
+                            type="button"
+                            onClick={() => handleImpersonate(biz)}
+                            className={`press px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                              isActive
+                                ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                : 'bg-indigo-600 text-white'
+                            }`}
+                          >
+                            {isActive ? 'פעיל ✓' : 'נהל עסק זה'}
+                          </button>
                         </div>
-                        {owner && (
-                          <p className="text-xs text-gray-400 mt-2 text-left">{formatLastSeen(owner.lastSeen)}</p>
-                        )}
-                      </button>
+                      </div>
                     );
                   })}
 
@@ -680,12 +712,16 @@ export default function SettingsPage() {
                   </button>
                 </div>
 
-                {/* Impersonate */}
+                {/* Manage / impersonate */}
                 <button
                   onClick={() => handleImpersonate(selectedBiz)}
-                  className="press w-full py-3 rounded-2xl glass text-sm font-medium text-amber-600 border border-amber-100"
+                  className={`press w-full py-3 rounded-2xl text-sm font-semibold transition-all ${
+                    activeBizId === selectedBiz.id
+                      ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                      : 'bg-indigo-600 text-white shadow-md shadow-indigo-300/30'
+                  }`}
                 >
-                  👁 הצג כמנהל העסק
+                  {activeBizId === selectedBiz.id ? 'פעיל ✓ — נהל עסק זה' : 'נהל עסק זה'}
                 </button>
 
                 {/* Delete */}
