@@ -9,6 +9,7 @@ import { useReorderSuggestions } from '@/hooks/useReorderSuggestions';
 import { ItemCard } from '@/components/ItemCard';
 import { BottomNav } from '@/components/BottomNav';
 import { DEFAULT_CATEGORIES, InvoiceLogEntry, ReorderSuggestion } from '@/types';
+import { signOutUser } from '@/lib/auth';
 
 export default function HomePage() {
   const { user, loading: authLoading } = useAuth();
@@ -41,6 +42,11 @@ export default function HomePage() {
 
   const lowStock = items.filter((i) => i.stock === 0 || (i.minStock > 0 && i.stock < i.minStock));
 
+  async function handleSignOut() {
+    await signOutUser();
+    router.replace('/login');
+  }
+
   if (authLoading || bizLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -55,15 +61,20 @@ export default function HomePage() {
       {/* Header */}
       <div className="glass-strong sticky top-0 z-10 px-4 pt-12 pb-3">
         <div className="flex items-center justify-between mb-2 animate-slide-down">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
-              <span className="text-white text-xs font-bold">M</span>
-            </div>
-            <h1 className="text-xl font-bold text-gray-900">Mlai</h1>
-          </div>
-          <div className="text-right">
-            <p className="text-sm font-medium text-gray-700">{business.name}</p>
+          {/* RIGHT in RTL: business name */}
+          <div>
+            <p className="text-base font-bold text-gray-900">{business.name}</p>
             <p className="text-xs text-gray-400">{items.length} פריטים</p>
+          </div>
+          {/* LEFT in RTL: language + logout */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-gray-400 glass rounded-lg px-2 py-1 select-none">עב</span>
+            <button
+              onClick={handleSignOut}
+              className="press flex items-center gap-1 text-sm text-gray-500 glass rounded-xl px-3 py-1.5"
+            >
+              יציאה
+            </button>
           </div>
         </div>
 

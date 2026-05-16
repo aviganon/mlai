@@ -22,6 +22,19 @@ export default function SettingsPage() {
     <div className="min-h-screen pb-28">
       {/* Header */}
       <div className="glass-strong sticky top-0 z-10 px-4 pt-12 pb-4 animate-slide-down">
+        {/* Top bar: business name (right) + lang/logout (left) */}
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sm font-bold text-gray-900 truncate max-w-[55%]">{business?.name ?? '—'}</p>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-gray-400 glass rounded-lg px-2 py-1 select-none">עב</span>
+            <button
+              onClick={handleSignOut}
+              className="press flex items-center gap-1 text-sm text-gray-500 glass rounded-xl px-3 py-1.5"
+            >
+              יציאה
+            </button>
+          </div>
+        </div>
         <h1 className="text-xl font-bold text-gray-900 text-right">הגדרות</h1>
       </div>
 
@@ -58,7 +71,7 @@ export default function SettingsPage() {
           <p className="text-xs text-gray-400">Mlai · גרסה 2.0</p>
         </div>
 
-        {/* Team - owner only */}
+        {/* Team - business owner only */}
         {isBusinessOwner && (
           <button onClick={() => router.push('/home/team')}
             className="press w-full glass rounded-2xl p-4 flex items-center justify-between">

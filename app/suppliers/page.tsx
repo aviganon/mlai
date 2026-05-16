@@ -6,6 +6,7 @@ import { useBusiness } from '@/hooks/useBusiness';
 import { useItems } from '@/hooks/useItems';
 import { BottomNav } from '@/components/BottomNav';
 import { InventoryItem } from '@/types';
+import { signOutUser } from '@/lib/auth';
 
 interface SupplierGroup {
   name: string;
@@ -68,6 +69,11 @@ export default function SuppliersPage() {
     [suppliers, selectedSupplier]
   );
 
+  async function handleSignOut() {
+    await signOutUser();
+    router.replace('/login');
+  }
+
   if (authLoading || bizLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -81,7 +87,22 @@ export default function SuppliersPage() {
     <div className="min-h-screen pb-28">
       {/* Header */}
       <div className="glass-strong sticky top-0 z-10 px-4 pt-12 pb-3">
-        <div className="flex items-center justify-between mb-3 animate-slide-down">
+        {/* Top bar: business name (right) + lang/logout (left) */}
+        <div className="flex items-center justify-between mb-2 animate-slide-down">
+          <p className="text-sm font-bold text-gray-900 truncate max-w-[55%]">{business.name}</p>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-gray-400 glass rounded-lg px-2 py-1 select-none">עב</span>
+            <button
+              onClick={handleSignOut}
+              className="press flex items-center gap-1 text-sm text-gray-500 glass rounded-xl px-3 py-1.5"
+            >
+              יציאה
+            </button>
+          </div>
+        </div>
+
+        {/* Page title row */}
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             {selectedSupplier ? (
               <button
@@ -156,7 +177,7 @@ export default function SuppliersPage() {
             <button
               key={item.id}
               onClick={() => router.push(`/home/item/${item.id}`)}
-              className={`press w-full glass rounded-2xl p-4 flex items-center gap-3 text-right animate-slide-up delay-${Math.min(i * 50, 300)}`}
+              className="press w-full glass rounded-2xl p-4 flex items-center gap-3 text-right animate-slide-up"
               style={{ animationDelay: `${i * 40}ms` }}
             >
               <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${stockDot(item)}`} />
@@ -202,14 +223,12 @@ export default function SuppliersPage() {
               className="press w-full glass rounded-2xl p-4 flex items-center gap-4 text-right animate-slide-up"
               style={{ animationDelay: `${i * 50}ms` }}
             >
-              {/* Icon */}
               <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-50 to-violet-50 flex items-center justify-center flex-shrink-0 border border-indigo-100">
                 <span className="text-xl">
                   {supplier.name === 'ללא ספק' ? '📦' : '🚚'}
                 </span>
               </div>
 
-              {/* Info */}
               <div className="flex-1 min-w-0 text-right">
                 <p className="font-semibold text-gray-900 truncate">{supplier.name}</p>
                 <p className="text-xs text-gray-400 mt-0.5">
@@ -222,7 +241,6 @@ export default function SuppliersPage() {
                 </p>
               </div>
 
-              {/* Item dots preview */}
               <div className="flex gap-1 flex-shrink-0">
                 {supplier.items.slice(0, 5).map((item) => (
                   <span
