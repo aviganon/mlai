@@ -2,13 +2,16 @@
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { useBusiness } from '@/hooks/useBusiness';
+import { useIsOwner } from '@/hooks/useIsOwner';
 import { signOutUser } from '@/lib/auth';
 import { BottomNav } from '@/components/BottomNav';
 
 export default function SettingsPage() {
   const { user } = useAuth();
   const { business } = useBusiness();
+  const { isOwner } = useIsOwner();
   const router = useRouter();
+  const isBusinessOwner = business?.ownerId === user?.uid;
 
   async function handleSignOut() {
     await signOutUser();
@@ -54,6 +57,24 @@ export default function SettingsPage() {
         <div className="glass rounded-3xl p-4 text-center">
           <p className="text-xs text-gray-400">Mlai · גרסה 2.0</p>
         </div>
+
+        {/* Team - owner only */}
+        {isBusinessOwner && (
+          <button onClick={() => router.push('/home/team')}
+            className="press w-full glass rounded-2xl p-4 flex items-center justify-between">
+            <span className="text-indigo-500 text-sm font-medium">ניהול צוות →</span>
+            <span className="text-xl">👥</span>
+          </button>
+        )}
+
+        {/* Admin - system owner only */}
+        {isOwner && (
+          <button onClick={() => router.push('/admin')}
+            className="press w-full bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex items-center justify-between">
+            <span className="text-indigo-600 text-sm font-semibold">פאנל בעלים →</span>
+            <span className="text-xl">🛡️</span>
+          </button>
+        )}
 
         {/* Sign out */}
         <button

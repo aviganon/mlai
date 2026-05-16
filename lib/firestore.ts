@@ -1,10 +1,77 @@
 import {
   collection, doc, addDoc, updateDoc, deleteDoc,
-  onSnapshot, query, where, orderBy, getDocs,
+  onSnapshot, query, where, orderBy, getDocs, getDoc,
   increment, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Business, InventoryItem, BusinessType } from '@/types';
+import { Business, InventoryItem, BusinessType, BusinessMember } from '@/types';
+
+// ─── Team / Invite ────────────────────────────────────────────
+
+function randomCode(): string {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+export async function getOrCreateInviteCode(businessId: string): Promise<string> {
+  const snap = await getDoc(doc(db, 'businesses', businessId));
+  if (!snap.exists()) throw new Error('Business not found');
+  const data = snap.data();
+  if (data.inviteCode) return data.inviteCode;
+  const code = randomCode();
+  await updateDoc(doc(db, 'businesses', businessId), { inviteCode: code });
+  return code;
+}
+
+export async function getBusinessByInviteCode(code: string): Promise<Business | null> {
+  const q = query(collection(db, 'businesses'), where('inviteCode', '==', code.toUpperCase()));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  const d = snap.docs[0];
+  return { id: d.id, ...d.data() } as Business;
+}
+
+export async function joinBusinessAsEmployee(
+  businessId: string,
+  member: { uid: string; email: string; displayName: string | null }
+): Promise<void> {
+  await updateDoc(doc(db, 'businesses', businessId), {
+    [`members.${member.uid}`]: {
+      email: member.email,
+      displayName: member.displayName,
+      role: 'employee',
+      addedAt: serverTimestamp(),
+    },
+  });
+}
+
+export async function removeTeamMember(businessId: string, uid: string): Promise<void> {
+  await updateDoc(doc(db, 'businesses', businessId), {
+    [`members.${uid}`]: null,
+  });
+}
+
+export function getTeamMembers(business: Business): BusinessMember[] {
+  const members = (business as unknown as Record<string, unknown>)?.members as Record<string, BusinessMember> | undefined;
+  if (!members) return [];
+  return Object.values(members).filter(Boolean);
+}
+
+// ─── Admin ────────────────────────────────────────────────────
+
+export async function getAllBusinesses(): Promise<Business[]> {
+  const snap = await getDocs(query(collection(db, 'businesses'), orderBy('createdAt', 'desc')));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Business[];
+}
+
+export async function adminDeleteBusiness(businessId: string): Promise<void> {
+  const itemsSnap = await getDocs(collection(db, 'businesses', businessId, 'items'));
+  await Promise.all(itemsSnap.docs.map((d) => deleteDoc(d.ref)));
+  await deleteDoc(doc(db, 'businesses', businessId));
+}
+
+export async function adminUpdateBusiness(businessId: string, data: Partial<Business>): Promise<void> {
+  await updateDoc(doc(db, 'businesses', businessId), data as Record<string, unknown>);
+}
 
 // ─── Business ────────────────────────────────────────────────
 
