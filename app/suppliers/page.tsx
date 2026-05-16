@@ -112,6 +112,16 @@ export default function SuppliersPage() {
     [suppliers, selectedSupplier]
   );
 
+  const sortedActiveItems = useMemo(() => {
+    if (!activeGroup) return [];
+    const priority = (item: InventoryItem) => {
+      if (item.stock === 0) return 0;
+      if (item.minStock > 0 && item.stock < item.minStock) return 1;
+      return 2;
+    };
+    return [...activeGroup.items].sort((a, b) => priority(a) - priority(b));
+  }, [activeGroup]);
+
   async function handleSaveDetails() {
     if (!business || !selectedSupplier) return;
     setSavingDetails(true);
@@ -284,32 +294,46 @@ export default function SuppliersPage() {
             </div>
           )}
 
-          {/* Items list */}
-          {activeGroup.items.map((item, i) => (
-            <button
-              key={item.id}
-              onClick={() => router.push(`/home/item/${item.id}`)}
-              className="press w-full glass rounded-2xl p-4 flex items-center gap-3 text-right animate-slide-up"
-              style={{ animationDelay: `${i * 40}ms` }}
-            >
-              <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${stockDot(item)}`} />
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-gray-900 truncate">{item.name}</p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {item.category}
-                  {item.sku ? ` · מק"ט ${item.sku}` : ''}
-                </p>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <p className="font-semibold text-gray-900">
-                  {item.stock} <span className="text-xs font-normal text-gray-400">{item.unit}</span>
-                </p>
-                {item.price > 0 && (
-                  <p className="text-xs text-gray-400">₪{item.price}</p>
-                )}
-              </div>
-            </button>
-          ))}
+          {/* Items list — sorted: low stock first */}
+          {sortedActiveItems.length === 0 && (
+            <div className="text-center py-10 text-gray-400 text-sm animate-fade-in">
+              אין פריטים משויכים לספק זה
+            </div>
+          )}
+          {sortedActiveItems.map((item, i) => {
+            const dot = stockDot(item);
+            const isLow = item.stock === 0 || (item.minStock > 0 && item.stock < item.minStock);
+            return (
+              <button
+                key={item.id}
+                onClick={() => router.push(`/home/item/${item.id}`)}
+                className="press w-full glass rounded-2xl p-4 flex items-center gap-3 text-right animate-slide-up"
+                style={{ animationDelay: `${i * 40}ms` }}
+              >
+                <span className={`w-3 h-3 rounded-full flex-shrink-0 shadow-sm ${dot}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-gray-900 truncate">{item.name}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {item.category}
+                    {item.sku ? ` · מק"ט ${item.sku}` : ''}
+                  </p>
+                  {isLow && (
+                    <p className={`text-xs font-medium mt-0.5 ${item.stock === 0 ? 'text-red-500' : 'text-amber-500'}`}>
+                      {item.stock === 0 ? 'אזל מהמלאי' : `מתחת למינימום (${item.minStock} ${item.unit})`}
+                    </p>
+                  )}
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="font-semibold text-gray-900">
+                    {item.stock} <span className="text-xs font-normal text-gray-400">{item.unit}</span>
+                  </p>
+                  {item.price > 0 && (
+                    <p className="text-xs text-gray-400">₪{item.price}</p>
+                  )}
+                </div>
+              </button>
+            );
+          })}
         </div>
       ) : (
         <div className="px-4 pt-3 space-y-2">

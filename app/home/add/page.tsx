@@ -3,10 +3,18 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { useBusiness } from '@/hooks/useBusiness';
+import { useItems } from '@/hooks/useItems';
 import { addItem } from '@/lib/firestore';
 import { DEFAULT_CATEGORIES, UNITS, ItemUnit } from '@/types';
+import { SupplierPicker } from '@/components/SupplierPicker';
 
 const inputCls = 'w-full bg-white/70 border border-gray-200 rounded-2xl px-4 py-3 text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent transition-all text-sm';
+
+function stripUndefined<T extends object>(obj: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined && v !== '')
+  ) as Partial<T>;
+}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -21,6 +29,7 @@ export default function AddItemPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { business } = useBusiness();
+  const { items } = useItems(business?.id ?? null);
 
   const [name, setName] = useState('');
   const [category, setCategory] = useState(DEFAULT_CATEGORIES[0]);
@@ -40,7 +49,7 @@ export default function AddItemPage() {
   async function handleSave() {
     if (!business || !user || !name.trim()) return;
     setSaving(true);
-    await addItem(business.id, {
+    const itemData = {
       name: name.trim(),
       category,
       unit,
@@ -49,11 +58,12 @@ export default function AddItemPage() {
       price: parseFloat(price) || 0,
       supplier: supplier.trim(),
       sku: sku.trim(),
-      packSize: packSize ? parseFloat(packSize) : undefined,
-      minOrder: minOrder ? parseFloat(minOrder) : undefined,
-      deliveryDays: deliveryDays ? parseInt(deliveryDays) : undefined,
-      targetStock: targetStock ? parseFloat(targetStock) : undefined,
-    });
+      ...(packSize ? { packSize: parseFloat(packSize) } : {}),
+      ...(minOrder ? { minOrder: parseFloat(minOrder) } : {}),
+      ...(deliveryDays ? { deliveryDays: parseInt(deliveryDays) } : {}),
+      ...(targetStock ? { targetStock: parseFloat(targetStock) } : {}),
+    };
+    await addItem(business.id, itemData);
     setSaving(false);
     router.back();
   }
@@ -126,7 +136,16 @@ export default function AddItemPage() {
               <input type="number" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" className={inputCls} />
             </Field>
             <Field label="ספק">
-              <input type="text" value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="שם הספק" className={inputCls} />
+              {business ? (
+                <SupplierPicker
+                  businessId={business.id}
+                  items={items}
+                  value={supplier}
+                  onChange={setSupplier}
+                />
+              ) : (
+                <input type="text" value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="שם הספק" className={inputCls} />
+              )}
             </Field>
           </div>
           <Field label='מק"ט'>

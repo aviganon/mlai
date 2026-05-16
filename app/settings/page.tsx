@@ -5,7 +5,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { useBusiness } from '@/hooks/useBusiness';
 import { useIsOwner } from '@/hooks/useIsOwner';
 import { signOutUser } from '@/lib/auth';
-import { getAllBusinesses, adminDeleteBusiness, adminUpdateBusiness } from '@/lib/firestore';
+import { getAllBusinesses, adminDeleteBusiness, adminUpdateBusiness, updateBusinessInvoiceEmail } from '@/lib/firestore';
 import { createBusiness, createPendingUser, addPendingMember } from '@/lib/adminFirestore';
 import { getAllUsers } from '@/lib/users';
 import { setUserOwner } from '@/lib/userOwner';
@@ -41,10 +41,15 @@ export default function SettingsPage() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [users, setUsers] = useState<MlaiUser[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'businesses' | 'users'>('businesses');
+
+  // Business detail panel
+  const [selectedBiz, setSelectedBiz] = useState<Business | null>(null);
+  const [panelInvoiceEmail, setPanelInvoiceEmail] = useState('');
+  const [savingEmail, setSavingEmail] = useState(false);
+  const [panelEditName, setPanelEditName] = useState('');
+  const [panelEditingName, setPanelEditingName] = useState(false);
+  const [panelConfirmDelete, setPanelConfirmDelete] = useState(false);
 
   // Add Business form
   const [showAddBusiness, setShowAddBusiness] = useState(false);
@@ -82,23 +87,9 @@ export default function SettingsPage() {
     router.replace('/login');
   }
 
-  async function handleDelete(id: string) {
-    await adminDeleteBusiness(id);
-    setBusinesses((prev) => prev.filter((b) => b.id !== id));
-    setConfirmDelete(null);
-    setUsers((prev) => prev.map((u) => u.businessId === id ? { ...u, businessId: null } : u));
-  }
-
   async function handleSetOwner(uid: string, val: boolean) {
     await setUserOwner(uid, val);
     setUsers((prev) => prev.map((u) => u.uid === uid ? { ...u, isOwner: val } : u));
-  }
-
-  async function handleSaveName(id: string) {
-    if (!editName.trim()) return;
-    await adminUpdateBusiness(id, { name: editName.trim() });
-    setBusinesses((prev) => prev.map((b) => b.id === id ? { ...b, name: editName.trim() } : b));
-    setEditId(null);
   }
 
   async function handleAddBusiness(e: React.FormEvent) {
@@ -180,6 +171,44 @@ export default function SettingsPage() {
       businessName: biz.name,
     }));
     router.push('/home');
+  }
+
+  function openBizPanel(biz: Business) {
+    setSelectedBiz(biz);
+    setPanelInvoiceEmail(biz.invoiceEmail ?? '');
+    setPanelEditName(biz.name);
+    setPanelEditingName(false);
+    setPanelConfirmDelete(false);
+  }
+
+  async function handleSaveInvoiceEmail() {
+    if (!selectedBiz) return;
+    setSavingEmail(true);
+    await updateBusinessInvoiceEmail(selectedBiz.id, panelInvoiceEmail.trim());
+    setBusinesses((prev) =>
+      prev.map((b) => b.id === selectedBiz.id ? { ...b, invoiceEmail: panelInvoiceEmail.trim() } : b)
+    );
+    setSelectedBiz((b) => b ? { ...b, invoiceEmail: panelInvoiceEmail.trim() } : b);
+    setSavingEmail(false);
+  }
+
+  async function handlePanelSaveName() {
+    if (!selectedBiz || !panelEditName.trim()) return;
+    await adminUpdateBusiness(selectedBiz.id, { name: panelEditName.trim() });
+    setBusinesses((prev) =>
+      prev.map((b) => b.id === selectedBiz.id ? { ...b, name: panelEditName.trim() } : b)
+    );
+    setSelectedBiz((b) => b ? { ...b, name: panelEditName.trim() } : b);
+    setPanelEditingName(false);
+  }
+
+  async function handlePanelDelete() {
+    if (!selectedBiz) return;
+    await adminDeleteBusiness(selectedBiz.id);
+    setBusinesses((prev) => prev.filter((b) => b.id !== selectedBiz.id));
+    setUsers((prev) => prev.map((u) => u.businessId === selectedBiz.id ? { ...u, businessId: null } : u));
+    setSelectedBiz(null);
+    setPanelConfirmDelete(false);
   }
 
   // While auth/owner status resolves, show nothing special
@@ -325,60 +354,36 @@ export default function SettingsPage() {
                   {businesses.map((biz) => {
                     const owner = users.find((u) => u.uid === biz.ownerId);
                     return (
-                      <div key={biz.id} className="glass rounded-2xl p-4 space-y-3 animate-fade-in">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-1.5">
+                      <button
+                        key={biz.id}
+                        type="button"
+                        onClick={() => openBizPanel(biz)}
+                        className="press w-full glass-strong rounded-3xl p-5 text-right animate-fade-in"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-2 flex-shrink-0">
                             {owner && (
-                              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isOnline(owner.lastSeen) ? 'bg-emerald-400' : 'bg-gray-300'}`} />
+                              <div className={`w-2.5 h-2.5 rounded-full ${isOnline(owner.lastSeen) ? 'bg-emerald-400' : 'bg-gray-300'}`} />
                             )}
-                            <div>
-                              {editId === biz.id ? (
-                                <input autoFocus value={editName} onChange={(e) => setEditName(e.target.value)}
-                                  className="border border-gray-200 rounded-xl px-3 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 w-40" />
-                              ) : (
-                                <p className="font-semibold text-gray-900 text-sm">{biz.name}</p>
-                              )}
-                              <p className="text-xs text-gray-400">{owner?.email ?? biz.ownerId}</p>
-                            </div>
+                            <span className="text-gray-300 text-sm">‹</span>
                           </div>
-                          <div className="text-right flex-shrink-0">
-                            <p className="text-xs text-gray-400">{(biz as unknown as Record<string, unknown>).domain as string ?? biz.type}</p>
-                            {owner && <p className="text-xs text-gray-400 mt-0.5">{formatLastSeen(owner.lastSeen)}</p>}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-gray-900 truncate">{biz.name}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {(biz as unknown as Record<string, unknown>).domain as string ?? biz.type}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1 truncate">
+                              {owner?.displayName ?? owner?.email ?? biz.ownerId}
+                            </p>
+                            {biz.invoiceEmail && (
+                              <p className="text-xs text-indigo-400 mt-0.5 truncate">📧 {biz.invoiceEmail}</p>
+                            )}
                           </div>
                         </div>
-
-                        <div className="flex gap-2">
-                          {editId === biz.id ? (
-                            <>
-                              <button onClick={() => handleSaveName(biz.id)} className="press flex-1 py-2 rounded-xl bg-gray-900 text-white text-xs font-medium">שמור</button>
-                              <button onClick={() => setEditId(null)} className="press flex-1 py-2 rounded-xl glass text-xs">ביטול</button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => handleImpersonate(biz)}
-                                className="press flex-1 py-2 rounded-xl glass text-xs font-medium text-amber-600 border border-amber-100"
-                              >
-                                👁 הצג כמנהל
-                              </button>
-                              <button onClick={() => { setEditId(biz.id); setEditName(biz.name); }}
-                                className="press flex-1 py-2 rounded-xl glass text-xs font-medium text-gray-600">✏️ ערוך שם</button>
-                              <button onClick={() => setConfirmDelete(biz.id)}
-                                className="press flex-1 py-2 rounded-xl bg-red-50 border border-red-100 text-red-500 text-xs font-medium">🗑 מחק</button>
-                            </>
-                          )}
-                        </div>
-
-                        {confirmDelete === biz.id && (
-                          <div className="bg-red-50 border border-red-200 rounded-xl p-3 space-y-2 animate-scale-in">
-                            <p className="text-xs text-red-700 font-medium text-right">למחוק את &quot;{biz.name}&quot; וכל הפריטים שלו?</p>
-                            <div className="flex gap-2">
-                              <button onClick={() => setConfirmDelete(null)} className="press flex-1 py-1.5 rounded-xl border border-gray-200 text-xs bg-white">ביטול</button>
-                              <button onClick={() => handleDelete(biz.id)} className="press flex-1 py-1.5 rounded-xl bg-red-500 text-white text-xs">מחק</button>
-                            </div>
-                          </div>
+                        {owner && (
+                          <p className="text-xs text-gray-400 mt-2 text-left">{formatLastSeen(owner.lastSeen)}</p>
                         )}
-                      </div>
+                      </button>
                     );
                   })}
 
@@ -563,6 +568,150 @@ export default function SettingsPage() {
         </div>
 
         <BottomNav />
+
+        {/* Business Detail Panel */}
+        {selectedBiz && (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center"
+            onClick={(e) => { if (e.target === e.currentTarget) setSelectedBiz(null); }}
+          >
+            <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setSelectedBiz(null)} />
+            <div className="relative w-full max-w-lg glass-strong rounded-t-3xl px-5 pt-5 pb-10 animate-slide-up shadow-2xl max-h-[85vh] overflow-y-auto">
+              {/* Handle */}
+              <div className="w-10 h-1 rounded-full bg-gray-300 mx-auto mb-5" />
+
+              {/* Header */}
+              <div className="flex items-center justify-between mb-5" dir="rtl">
+                <button
+                  onClick={() => setSelectedBiz(null)}
+                  className="press w-8 h-8 rounded-xl glass flex items-center justify-center text-gray-400 text-sm"
+                >
+                  ✕
+                </button>
+                <h2 className="text-lg font-bold text-gray-900 truncate flex-1 text-right mr-3">{selectedBiz.name}</h2>
+              </div>
+
+              <div className="space-y-4" dir="rtl">
+                {/* Business info */}
+                <div className="glass rounded-2xl p-4 space-y-1">
+                  <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">פרטי עסק</p>
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-sm text-gray-500">סוג</span>
+                    <span className="text-sm font-medium text-gray-900">{(selectedBiz as unknown as Record<string, unknown>).domain as string ?? selectedBiz.type}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">בעלים</span>
+                    <span className="text-sm font-medium text-gray-900 truncate max-w-[60%]">
+                      {users.find((u) => u.uid === selectedBiz.ownerId)?.displayName
+                        ?? users.find((u) => u.uid === selectedBiz.ownerId)?.email
+                        ?? selectedBiz.ownerId}
+                    </span>
+                  </div>
+                  {selectedBiz.branch && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-500">סניף</span>
+                      <span className="text-sm font-medium text-gray-900">{selectedBiz.branch}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Edit name */}
+                <div className="glass rounded-2xl p-4 space-y-2">
+                  <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">שם עסק</p>
+                  {panelEditingName ? (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setPanelEditingName(false)}
+                        className="press py-2 px-3 rounded-xl glass text-xs text-gray-600"
+                      >
+                        ביטול
+                      </button>
+                      <button
+                        onClick={handlePanelSaveName}
+                        className="press py-2 px-3 rounded-xl bg-gray-900 text-white text-xs font-medium"
+                      >
+                        שמור
+                      </button>
+                      <input
+                        autoFocus
+                        value={panelEditName}
+                        onChange={(e) => setPanelEditName(e.target.value)}
+                        className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white/70"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <button
+                        onClick={() => setPanelEditingName(true)}
+                        className="press text-xs text-indigo-600 font-medium glass rounded-xl px-3 py-1.5"
+                      >
+                        ✏️ ערוך
+                      </button>
+                      <p className="text-sm font-semibold text-gray-900">{selectedBiz.name}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Invoice email section */}
+                <div className="glass rounded-2xl p-4 space-y-3">
+                  <div className="text-right">
+                    <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">חשבוניות במייל</p>
+                    <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                      שלח חשבוניות ספקים לכתובת זו — המערכת תעדכן את המלאי אוטומטית
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">כתובת מייל לחשבוניות</label>
+                    <input
+                      type="email"
+                      value={panelInvoiceEmail}
+                      onChange={(e) => setPanelInvoiceEmail(e.target.value)}
+                      placeholder="invoices@example.com"
+                      className="w-full bg-white/70 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 transition-all"
+                      dir="ltr"
+                    />
+                  </div>
+                  <button
+                    onClick={handleSaveInvoiceEmail}
+                    disabled={savingEmail}
+                    className="press w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white py-2.5 rounded-xl text-sm font-semibold shadow-md disabled:opacity-50"
+                  >
+                    {savingEmail ? 'שומר...' : 'שמור כתובת מייל'}
+                  </button>
+                </div>
+
+                {/* Impersonate */}
+                <button
+                  onClick={() => handleImpersonate(selectedBiz)}
+                  className="press w-full py-3 rounded-2xl glass text-sm font-medium text-amber-600 border border-amber-100"
+                >
+                  👁 הצג כמנהל העסק
+                </button>
+
+                {/* Delete */}
+                {!panelConfirmDelete ? (
+                  <button
+                    onClick={() => setPanelConfirmDelete(true)}
+                    className="press w-full py-3 rounded-2xl bg-red-50 border border-red-100 text-red-500 text-sm font-medium"
+                  >
+                    🗑 מחק עסק
+                  </button>
+                ) : (
+                  <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-3 animate-scale-in">
+                    <p className="text-sm text-red-700 font-medium text-right">
+                      למחוק את &quot;{selectedBiz.name}&quot; וכל הפריטים שלו?
+                      <span className="block text-xs font-normal text-red-400 mt-0.5">פעולה זו לא ניתנת לביטול</span>
+                    </p>
+                    <div className="flex gap-2">
+                      <button onClick={() => setPanelConfirmDelete(false)} className="press flex-1 py-2.5 rounded-xl border border-gray-200 bg-white text-xs">ביטול</button>
+                      <button onClick={handlePanelDelete} className="press flex-1 py-2.5 rounded-xl bg-red-500 text-white text-xs font-semibold">מחק לצמיתות</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

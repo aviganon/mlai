@@ -1,0 +1,45 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: true if the caller is the business owner OR is a member
+    // whose mlaiUsers doc points to this business.
+    function isMember(businessId) {
+      return request.auth != null && (
+        resource.data.ownerId == request.auth.uid ||
+        get(/databases/$(database)/documents/mlaiUsers/$(request.auth.uid)).data.businessId == businessId
+      );
+    }
+
+    // mlaiUsers – each user can read/write only their own doc
+    match /mlaiUsers/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // businesses – owner or member
+    match /businesses/{businessId} {
+      allow read, write: if isMember(businessId);
+
+      // items subcollection
+      match /items/{itemId} {
+        allow read, write: if isMember(businessId);
+      }
+
+      // purchaseOrders subcollection
+      match /purchaseOrders/{orderId} {
+        allow read, write: if isMember(businessId);
+      }
+
+      // supplierDetails subcollection
+      match /supplierDetails/{supplierId} {
+        allow read, write: if isMember(businessId);
+      }
+
+      // catch-all for any other subcollections under a business
+      match /{subcollection}/{docId} {
+        allow read, write: if isMember(businessId);
+      }
+    }
+  }
+}

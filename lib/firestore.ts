@@ -73,7 +73,21 @@ export async function adminUpdateBusiness(businessId: string, data: Partial<Busi
   await updateDoc(doc(db, 'businesses', businessId), data as Record<string, unknown>);
 }
 
+export async function updateBusinessInvoiceEmail(businessId: string, email: string): Promise<void> {
+  await setDoc(
+    doc(db, 'businesses', businessId),
+    { invoiceEmail: email },
+    { merge: true }
+  );
+}
+
 // ─── Business ────────────────────────────────────────────────
+
+export async function getBusinessById(businessId: string): Promise<Business | null> {
+  const snap = await getDoc(doc(db, 'businesses', businessId));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() } as Business;
+}
 
 export async function getUserBusiness(userId: string): Promise<Business | null> {
   const q = query(collection(db, 'businesses'), where('ownerId', '==', userId));

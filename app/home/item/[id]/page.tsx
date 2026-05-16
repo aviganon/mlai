@@ -5,8 +5,15 @@ import { useBusiness } from '@/hooks/useBusiness';
 import { useItems } from '@/hooks/useItems';
 import { updateItem, updateItemStock, deleteItem } from '@/lib/firestore';
 import { DEFAULT_CATEGORIES, UNITS, ItemUnit } from '@/types';
+import { SupplierPicker } from '@/components/SupplierPicker';
 
 const inputCls = 'w-full bg-white/70 border border-gray-200 rounded-2xl px-4 py-3 text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent transition-all text-sm';
+
+function stripUndefined<T extends object>(obj: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined && v !== '')
+  ) as Partial<T>;
+}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -75,10 +82,10 @@ export default function EditItemPage() {
       price: parseFloat(price) || 0,
       supplier: supplier.trim(),
       sku: sku.trim(),
-      packSize: packSize ? parseFloat(packSize) : undefined,
-      minOrder: minOrder ? parseFloat(minOrder) : undefined,
-      deliveryDays: deliveryDays ? parseInt(deliveryDays) : undefined,
-      targetStock: targetStock ? parseFloat(targetStock) : undefined,
+      ...(packSize ? { packSize: parseFloat(packSize) } : {}),
+      ...(minOrder ? { minOrder: parseFloat(minOrder) } : {}),
+      ...(deliveryDays ? { deliveryDays: parseInt(deliveryDays) } : {}),
+      ...(targetStock ? { targetStock: parseFloat(targetStock) } : {}),
     });
     setSaving(false);
     router.back();
@@ -172,14 +179,21 @@ export default function EditItemPage() {
               <input type="number" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" className={inputCls} />
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="ספק">
+          <Field label="ספק">
+            {business ? (
+              <SupplierPicker
+                businessId={business.id}
+                items={items}
+                value={supplier}
+                onChange={setSupplier}
+              />
+            ) : (
               <input type="text" value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="שם הספק" className={inputCls} />
-            </Field>
-            <Field label='מק"ט'>
-              <input type="text" value={sku} onChange={(e) => setSku(e.target.value)} placeholder="אופציונלי" className={inputCls} />
-            </Field>
-          </div>
+            )}
+          </Field>
+          <Field label='מק"ט'>
+            <input type="text" value={sku} onChange={(e) => setSku(e.target.value)} placeholder="אופציונלי" className={inputCls} />
+          </Field>
         </div>
 
         {/* Advanced settings collapsible */}

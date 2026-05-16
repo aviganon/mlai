@@ -9,6 +9,7 @@ export interface Business {
   branch: string;
   ownerId: string;
   createdAt: Date;
+  invoiceEmail?: string;
 }
 
 export interface InventoryItem {
