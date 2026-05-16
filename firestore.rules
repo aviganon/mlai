@@ -12,6 +12,12 @@ service cloud.firestore {
       );
     }
 
+    // Helper: true if the caller has isOwner: true in their mlaiUsers doc.
+    function isMlaiOwner() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/mlaiUsers/$(request.auth.uid)).data.isOwner == true;
+    }
+
     // mlaiUsers – each user can read/write only their own doc
     match /mlaiUsers/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
@@ -40,6 +46,13 @@ service cloud.firestore {
       match /{subcollection}/{docId} {
         allow read, write: if isMember(businessId);
       }
+    }
+
+    // mlaiConfig – readable by anyone (for registration code validation),
+    // writable only by mlai owners.
+    match /mlaiConfig/{docId} {
+      allow read: if true;
+      allow write: if isMlaiOwner();
     }
   }
 }

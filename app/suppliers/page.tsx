@@ -6,6 +6,7 @@ import { useBusiness } from '@/hooks/useBusiness';
 import { useItems } from '@/hooks/useItems';
 import { getAllSupplierDetails, getSupplierDetails, saveSupplierDetails, updateItem } from '@/lib/firestore';
 import { BottomNav } from '@/components/BottomNav';
+import { InvoiceNotificationBadge } from '@/components/InvoiceNotificationBadge';
 import { InventoryItem, SupplierDetails } from '@/types';
 
 interface SupplierGroup {
@@ -235,6 +236,7 @@ export default function SuppliersPage() {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            <InvoiceNotificationBadge businessId={business.id} />
             {!selectedSupplier && (
               <button
                 onClick={openNewModal}

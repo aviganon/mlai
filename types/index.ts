@@ -54,7 +54,7 @@ export interface MlaiUser {
   photoURL: string | null;
   isOwner: boolean;
   businessId: string | null;
-  role: 'owner' | 'buyer' | 'employee';
+  role: 'owner' | 'buyer' | 'employee' | 'manager';
   lastSeen: Date;
   createdAt: Date;
 }
@@ -72,7 +72,7 @@ export interface BusinessMember {
   uid: string;
   email: string;
   displayName: string | null;
-  role: 'owner' | 'buyer' | 'employee';
+  role: 'owner' | 'buyer' | 'employee' | 'manager';
   addedAt: Date;
 }
 

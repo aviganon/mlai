@@ -19,7 +19,7 @@ export async function createBusiness(data: {
 export async function createPendingUser(data: {
   email: string;
   displayName: string;
-  role: 'owner' | 'employee';
+  role: 'owner' | 'employee' | 'manager';
   businessId: string | null;
   isOwner: boolean;
 }): Promise<string> {

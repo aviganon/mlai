@@ -1,6 +1,8 @@
 'use client';
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { useAuth } from '@/components/AuthProvider';
 import { signInWithGoogle } from '@/lib/auth';
 import { createAccountWithEmail } from '@/lib/emailAuth';
@@ -17,6 +19,7 @@ function RegisterForm() {
   const [email, setEmail] = useState(searchParams.get('email') ?? '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -36,9 +39,20 @@ function RegisterForm() {
       setError('הסיסמה חייבת להכיל לפחות 6 תווים');
       return;
     }
+    if (!inviteCode.trim()) {
+      setError('יש להזין קוד הזמנה');
+      return;
+    }
 
     setSubmitting(true);
     try {
+      const codeDoc = await getDoc(doc(db, 'mlaiConfig', 'registrationCode'));
+      const validCode = codeDoc.exists() ? (codeDoc.data() as { code: string }).code : null;
+      if (!validCode || inviteCode.trim().toUpperCase() !== validCode.toUpperCase()) {
+        setError('קוד הזמנה שגוי');
+        setSubmitting(false);
+        return;
+      }
       await createAccountWithEmail(email, password, displayName);
       router.replace('/home');
     } catch (e) {
@@ -141,6 +155,16 @@ function RegisterForm() {
               placeholder="אימות סיסמה"
               required
               className={inputCls}
+            />
+            <input
+              type="text"
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+              placeholder="קוד הזמנה *"
+              required
+              maxLength={6}
+              className={`${inputCls} font-mono tracking-widest uppercase`}
+              dir="ltr"
             />
             <button
               type="submit"

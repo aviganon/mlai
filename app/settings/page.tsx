@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/components/AuthProvider';
 import { useBusiness } from '@/hooks/useBusiness';
@@ -73,13 +73,18 @@ export default function SettingsPage() {
   const [showAddUser, setShowAddUser] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserDisplayName, setNewUserDisplayName] = useState('');
-  const [newUserRole, setNewUserRole] = useState<'owner' | 'employee'>('employee');
+  const [newUserRole, setNewUserRole] = useState<'employee' | 'manager'>('employee');
   const [newUserBusinessId, setNewUserBusinessId] = useState<string>('');
   const [newUserIsOwner, setNewUserIsOwner] = useState(false);
   const [addUserLoading, setAddUserLoading] = useState(false);
   const [addUserSuccess, setAddUserSuccess] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
+
+  // Registration code
+  const [regCode, setRegCode] = useState('');
+  const [generatingCode, setGeneratingCode] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
 
   // Domains state
   const [domains, setDomains] = useState<Domain[]>([]);
@@ -100,10 +105,16 @@ export default function SettingsPage() {
     if (authLoading || ownerLoading) return;
     if (!user || !isOwner) return;
     setAdminLoading(true);
-    Promise.all([getAllBusinesses(), getAllUsers(), getDomains()]).then(([b, u, d]) => {
+    Promise.all([
+      getAllBusinesses(),
+      getAllUsers(),
+      getDomains(),
+      getDoc(doc(db, 'mlaiConfig', 'registrationCode')),
+    ]).then(([b, u, d, codeDoc]) => {
       setBusinesses(b);
       setUsers(u);
       setDomains(d);
+      if (codeDoc.exists()) setRegCode((codeDoc.data() as { code: string }).code ?? '');
       setAdminLoading(false);
     });
   }, [user, isOwner, authLoading, ownerLoading]);
@@ -116,6 +127,16 @@ export default function SettingsPage() {
   async function handleSetOwner(uid: string, val: boolean) {
     await setUserOwner(uid, val);
     setUsers((prev) => prev.map((u) => u.uid === uid ? { ...u, isOwner: val } : u));
+  }
+
+  async function handleGenerateCode() {
+    setGeneratingCode(true);
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    const code = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    await setDoc(doc(db, 'mlaiConfig', 'registrationCode'), { code });
+    setRegCode(code);
+    setCodeCopied(false);
+    setGeneratingCode(false);
   }
 
   async function handleAddBusiness(e: React.FormEvent) {
@@ -580,12 +601,16 @@ export default function SettingsPage() {
                             />
                             <select
                               value={newUserRole}
-                              onChange={(e) => setNewUserRole(e.target.value as 'owner' | 'employee')}
+                              onChange={(e) => {
+                                const role = e.target.value as 'employee' | 'manager';
+                                setNewUserRole(role);
+                                if (role === 'employee') setNewUserIsOwner(false);
+                              }}
                               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white/70 appearance-none"
                               dir="rtl"
                             >
-                              <option value="owner">בעלים</option>
                               <option value="employee">עובד</option>
+                              <option value="manager">מנהל</option>
                             </select>
                             <select
                               value={newUserBusinessId}
@@ -598,15 +623,17 @@ export default function SettingsPage() {
                                 <option key={biz.id} value={biz.id}>{biz.name}</option>
                               ))}
                             </select>
-                            <label className="flex items-center justify-between gap-3 px-3 py-2.5 bg-white/70 border border-gray-200 rounded-xl cursor-pointer">
-                              <span className="text-sm text-gray-700">הרשאות בעלים במערכת</span>
-                              <input
-                                type="checkbox"
-                                checked={newUserIsOwner}
-                                onChange={(e) => setNewUserIsOwner(e.target.checked)}
-                                className="w-4 h-4 accent-indigo-600 rounded"
-                              />
-                            </label>
+                            {newUserRole === 'manager' && (
+                              <label className="flex items-center justify-between gap-3 px-3 py-2.5 bg-white/70 border border-gray-200 rounded-xl cursor-pointer">
+                                <span className="text-sm text-gray-700">הרשאות בעלים במערכת</span>
+                                <input
+                                  type="checkbox"
+                                  checked={newUserIsOwner}
+                                  onChange={(e) => setNewUserIsOwner(e.target.checked)}
+                                  className="w-4 h-4 accent-indigo-600 rounded"
+                                />
+                              </label>
+                            )}
                           </div>
                           <div className="flex gap-2">
                             <button
@@ -635,6 +662,42 @@ export default function SettingsPage() {
                       )}
                     </form>
                   )}
+
+                  {/* Registration code card */}
+                  <div className="glass rounded-2xl p-4 space-y-3 border border-gray-100">
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-gray-900">קוד הרשמה</p>
+                      <p className="text-xs text-gray-400 mt-0.5">שתף קוד זה עם משתמשים חדשים להרשמה</p>
+                    </div>
+                    {regCode ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(regCode);
+                            setCodeCopied(true);
+                            setTimeout(() => setCodeCopied(false), 2000);
+                          }}
+                          className="press flex-shrink-0 px-3 py-2 rounded-xl glass border border-gray-200 text-xs text-gray-600"
+                        >
+                          {codeCopied ? '✅' : '📋'}
+                        </button>
+                        <p className="flex-1 font-mono text-base font-bold tracking-widest text-gray-900 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-center select-all">
+                          {regCode}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 text-center py-1">אין קוד פעיל</p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleGenerateCode}
+                      disabled={generatingCode}
+                      className="press w-full py-2.5 rounded-xl bg-gray-900 text-white text-xs font-semibold disabled:opacity-50"
+                    >
+                      {generatingCode ? '...' : '🔄 צור קוד חדש'}
+                    </button>
+                  </div>
 
                   {users.map((u) => (
                     <div key={u.uid} className="glass rounded-2xl p-4 flex items-center gap-3 animate-fade-in">
