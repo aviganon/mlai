@@ -2,13 +2,22 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
+import { useIsOwner } from '@/hooks/useIsOwner';
 import { createBusiness } from '@/lib/firestore';
 import { getDomains, DEFAULT_DOMAINS } from '@/lib/domains';
 import { Domain } from '@/types';
 
 export default function OnboardingPage() {
   const { user } = useAuth();
+  const { isOwner, loading: ownerLoading } = useIsOwner();
   const router = useRouter();
+
+  useEffect(() => {
+    if (ownerLoading) return;
+    if (isOwner) {
+      router.replace('/settings');
+    }
+  }, [isOwner, ownerLoading, router]);
   const [name, setName] = useState('');
   const [branch, setBranch] = useState('');
   const [domains, setDomains] = useState<Domain[]>([]);

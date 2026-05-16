@@ -198,7 +198,7 @@ export default function SettingsPage() {
     return (
       <div className="min-h-screen pb-28">
         {/* Header */}
-        <div className="glass-strong sticky top-0 z-10 px-4 pt-12 pb-4 animate-slide-down">
+        <div className="glass-strong sticky top-0 z-10 px-4 pt-8 pb-4 animate-slide-down">
           <div className="flex items-center justify-between mb-1">
             <p className="text-sm font-bold text-gray-900 truncate max-w-[55%]">{business?.name ?? '—'}</p>
             <div className="flex items-center gap-2">
@@ -571,7 +571,7 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen pb-28">
       {/* Header */}
-      <div className="glass-strong sticky top-0 z-10 px-4 pt-12 pb-4 animate-slide-down">
+      <div className="glass-strong sticky top-0 z-10 px-4 pt-8 pb-4 animate-slide-down">
         <div className="flex items-center justify-between mb-2">
           <p className="text-sm font-bold text-gray-900 truncate max-w-[55%]">{business?.name ?? '—'}</p>
           <div className="flex items-center gap-2">

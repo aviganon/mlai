@@ -21,7 +21,7 @@ export default function RootPage() {
       try {
         const profile = await getUser(user.uid);
         if (profile?.isOwner) {
-          router.replace('/admin');
+          router.replace('/settings');
           return;
         }
         const business = await getUserBusiness(user.uid);
