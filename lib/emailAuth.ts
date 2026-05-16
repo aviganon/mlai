@@ -3,11 +3,12 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   updateProfile,
+  UserCredential,
 } from 'firebase/auth';
 import { auth } from './firebase';
 
-export async function signInWithEmail(email: string, password: string): Promise<void> {
-  await signInWithEmailAndPassword(auth, email, password);
+export async function signInWithEmail(email: string, password: string): Promise<UserCredential> {
+  return signInWithEmailAndPassword(auth, email, password);
 }
 
 export async function createAccountWithEmail(email: string, password: string, displayName: string): Promise<void> {

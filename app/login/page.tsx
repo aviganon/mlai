@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { signInWithGoogle } from '@/lib/auth';
 import { signInWithEmail, sendPasswordReset } from '@/lib/emailAuth';
+import { linkGoogleToCurrentUser, ensureMlaiUserDoc } from '@/lib/authLink';
+import { auth } from '@/lib/firebase';
 
 const inputCls =
   'w-full bg-white/70 border border-gray-200 rounded-2xl px-4 py-4 text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 transition-all text-sm';
@@ -22,6 +24,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [resetSent, setResetSent] = useState(false);
 
+  // account linking
+  const [pendingGoogleLink, setPendingGoogleLink] = useState(false);
+  const [linkSuccess, setLinkSuccess] = useState(false);
+
   useEffect(() => {
     if (!loading && user) router.replace('/home');
   }, [user, loading, router]);
@@ -31,8 +37,20 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await signInWithGoogle();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'אירעה שגיאה. נסה שוב.');
+      // Ensure the user has an mlaiUsers document after Google sign-in
+      if (auth.currentUser) {
+        await ensureMlaiUserDoc(auth.currentUser);
+      }
+      // AuthProvider will handle the redirect to /home
+    } catch (e: unknown) {
+      const code = (e as { code?: string })?.code;
+      if (code === 'auth/account-exists-with-different-credential') {
+        setError('נמצא חשבון עם אימייל זה. הכנס עם אימייל וסיסמה תחילה כדי לקשר את החשבונות');
+        setTab('email');
+        setPendingGoogleLink(true);
+      } else {
+        setError(e instanceof Error ? e.message : 'אירעה שגיאה. נסה שוב.');
+      }
       setSubmitting(false);
     }
   }
@@ -41,9 +59,22 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setResetSent(false);
+    setLinkSuccess(false);
     setSubmitting(true);
     try {
-      await signInWithEmail(email, password);
+      const cred = await signInWithEmail(email, password);
+      if (pendingGoogleLink) {
+        try {
+          await linkGoogleToCurrentUser(cred.user);
+          setLinkSuccess(true);
+          setPendingGoogleLink(false);
+          // AuthProvider will redirect once auth state updates
+        } catch (linkErr: unknown) {
+          // User is already signed in — don't block them, just report the issue
+          setError(linkErr instanceof Error ? linkErr.message : 'קישור חשבון Google נכשל');
+          setSubmitting(false);
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'אירעה שגיאה. נסה שוב.');
       setSubmitting(false);
@@ -183,6 +214,12 @@ export default function LoginPage() {
           {error && (
             <div className="mt-4 bg-red-50 border border-red-100 rounded-2xl px-4 py-3 text-sm text-red-600 text-right animate-fade-in">
               {error}
+            </div>
+          )}
+
+          {linkSuccess && !error && (
+            <div className="mt-4 bg-green-50 border border-green-100 rounded-2xl px-4 py-3 text-sm text-green-700 text-right animate-fade-in">
+              החשבונות קושרו בהצלחה ✓
             </div>
           )}
         </div>
