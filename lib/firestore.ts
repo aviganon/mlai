@@ -1,10 +1,10 @@
 import {
   collection, doc, addDoc, updateDoc, deleteDoc,
   onSnapshot, query, where, orderBy, getDocs, getDoc,
-  increment, serverTimestamp,
+  increment, serverTimestamp, limit,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Business, InventoryItem, BusinessType, BusinessMember } from '@/types';
+import { Business, InventoryItem, BusinessType, BusinessMember, InvoiceLogEntry, ReorderSuggestion } from '@/types';
 
 // ─── Team / Invite ────────────────────────────────────────────
 
@@ -148,4 +148,37 @@ export async function updateItemStock(
 
 export async function deleteItem(businessId: string, itemId: string): Promise<void> {
   await deleteDoc(doc(db, 'businesses', businessId, 'items', itemId));
+}
+
+// ─── Invoice Log ──────────────────────────────────────────────
+
+export function subscribeToInvoiceLog(
+  businessId: string,
+  callback: (entries: InvoiceLogEntry[]) => void
+): () => void {
+  const q = query(
+    collection(db, 'businesses', businessId, 'invoiceLog'),
+    orderBy('parsedAt', 'desc'),
+    limit(5)
+  );
+  return onSnapshot(q, (snap) => {
+    const entries = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as InvoiceLogEntry[];
+    callback(entries);
+  });
+}
+
+// ─── Reorder Suggestions ──────────────────────────────────────
+
+export function subscribeToReorderSuggestions(
+  businessId: string,
+  callback: (suggestions: ReorderSuggestion[]) => void
+): () => void {
+  const q = query(
+    collection(db, 'businesses', businessId, 'reorderSuggestions'),
+    orderBy('createdAt', 'desc')
+  );
+  return onSnapshot(q, (snap) => {
+    const suggestions = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ReorderSuggestion[];
+    callback(suggestions);
+  });
 }

@@ -4,14 +4,18 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { useBusiness } from '@/hooks/useBusiness';
 import { useItems } from '@/hooks/useItems';
+import { useInvoiceLog } from '@/hooks/useInvoiceLog';
+import { useReorderSuggestions } from '@/hooks/useReorderSuggestions';
 import { ItemCard } from '@/components/ItemCard';
 import { BottomNav } from '@/components/BottomNav';
-import { DEFAULT_CATEGORIES } from '@/types';
+import { DEFAULT_CATEGORIES, InvoiceLogEntry, ReorderSuggestion } from '@/types';
 
 export default function HomePage() {
   const { user, loading: authLoading } = useAuth();
   const { business, loading: bizLoading } = useBusiness();
   const { items, loading: itemsLoading } = useItems(business?.id ?? null);
+  const { entries: invoiceLog } = useInvoiceLog(business?.id ?? null);
+  const { suggestions: reorderSuggestions } = useReorderSuggestions(business?.id ?? null);
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('הכל');
@@ -71,6 +75,26 @@ export default function HomePage() {
         )}
       </div>
 
+      {/* Reorder Suggestions */}
+      {reorderSuggestions.length > 0 && (
+        <div className="px-4 pt-3 animate-slide-up delay-50">
+          <div className="glass rounded-2xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs text-gray-400">{reorderSuggestions.length} הצעות</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-base">📋</span>
+                <h2 className="text-sm font-semibold text-gray-800">הצעות הזמנה</h2>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {reorderSuggestions.map((s) => (
+                <ReorderCard key={s.id} suggestion={s} onTap={() => router.push(`/home/item/${s.itemId}`)} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Search */}
       <div className="px-4 pt-3 pb-1 animate-fade-in">
         <div className="relative">
@@ -128,6 +152,26 @@ export default function HomePage() {
         ))}
       </div>
 
+      {/* Invoice Log */}
+      {invoiceLog.length > 0 && (
+        <div className="px-4 mt-4 mb-2 animate-fade-in">
+          <div className="glass rounded-2xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs text-gray-400">אחרונות</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-base">📩</span>
+                <h2 className="text-sm font-semibold text-gray-800">יבואי חשבוניות</h2>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {invoiceLog.map((entry) => (
+                <InvoiceLogCard key={entry.id} entry={entry} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* FAB */}
       <button
         onClick={() => router.push('/home/add')}
@@ -138,6 +182,67 @@ export default function HomePage() {
       </button>
 
       <BottomNav />
+    </div>
+  );
+}
+
+function ReorderCard({
+  suggestion,
+  onTap,
+}: {
+  suggestion: ReorderSuggestion;
+  onTap: () => void;
+}) {
+  return (
+    <button
+      onClick={onTap}
+      className="press w-full flex items-center gap-3 bg-indigo-50/60 border border-indigo-100 rounded-xl px-3 py-2.5 text-right"
+    >
+      <span className="text-lg flex-shrink-0">🛒</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-900 truncate">{suggestion.itemName}</p>
+        <p className="text-xs text-gray-400">
+          מלאי: {suggestion.currentStock} {suggestion.unit} · מינ׳: {suggestion.minStock}
+        </p>
+      </div>
+      <div className="flex-shrink-0 text-right">
+        <p className="text-xs font-semibold text-indigo-600">הזמן {suggestion.suggestedOrderQty}</p>
+        {suggestion.supplier && (
+          <p className="text-xs text-gray-400 truncate max-w-20">{suggestion.supplier}</p>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function InvoiceLogCard({ entry }: { entry: InvoiceLogEntry }) {
+  const date = entry.parsedAt
+    ? new Date((entry.parsedAt as unknown as { seconds: number }).seconds * 1000)
+    : null;
+  const timeStr = date
+    ? date.toLocaleDateString('he-IL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : '';
+
+  return (
+    <div
+      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-right ${
+        entry.status === 'error'
+          ? 'bg-red-50 border border-red-100'
+          : 'bg-emerald-50/60 border border-emerald-100'
+      }`}
+    >
+      <span className="text-lg flex-shrink-0">{entry.status === 'error' ? '❌' : '✅'}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-900 truncate">
+          {entry.supplier || 'ספק לא ידוע'}
+        </p>
+        <p className="text-xs text-gray-400">
+          {entry.status === 'error'
+            ? entry.error ?? 'שגיאה בעיבוד'
+            : `${entry.itemsUpdated} פריטים עודכנו`}
+        </p>
+      </div>
+      {timeStr && <p className="text-xs text-gray-300 flex-shrink-0">{timeStr}</p>}
     </div>
   );
 }

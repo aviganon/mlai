@@ -86,3 +86,26 @@ export const DEFAULT_DOMAIN_UNITS: Record<BusinessType, ItemUnit[]> = {
   store: ['יחידה', 'זוג', 'ארגז', 'אחר'],
   other: ['יחידה', 'ק"ג', 'ליטר', 'מטר', 'אחר'],
 };
+
+export interface InvoiceLogEntry {
+  id: string;
+  parsedAt: Date;
+  supplier: string;
+  itemsUpdated: number;
+  items: Array<{ name: string; quantity: number; unit: string; price: number; itemId?: string }>;
+  rawText: string;
+  status: 'success' | 'error';
+  error?: string;
+}
+
+export interface ReorderSuggestion {
+  id: string;
+  itemId: string;
+  itemName: string;
+  currentStock: number;
+  minStock: number;
+  suggestedOrderQty: number;
+  supplier: string;
+  unit: string;
+  createdAt: Date;
+}
