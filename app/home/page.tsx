@@ -1,14 +1,26 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Search,
+  Plus,
+  AlertTriangle,
+  Package,
+  ClipboardList,
+  TrendingUp,
+  Filter,
+  ShoppingCart,
+} from 'lucide-react';
+import Link from 'next/link';
 import { useAuth } from '@/components/AuthProvider';
 import { useBusiness } from '@/hooks/useBusiness';
 import { useIsOwner } from '@/hooks/useIsOwner';
 import { useItems } from '@/hooks/useItems';
 import { useInvoiceLog } from '@/hooks/useInvoiceLog';
 import { useReorderSuggestions } from '@/hooks/useReorderSuggestions';
-import { ItemCard } from '@/components/ItemCard';
-import { BottomNav } from '@/components/BottomNav';
+import { ItemCard } from '@/components/inventory/ItemCard';
+import { BottomNav } from '@/components/inventory/BottomNav';
 import { DEFAULT_CATEGORIES, InvoiceLogEntry, ReorderSuggestion } from '@/types';
 
 export default function HomePage() {
@@ -25,8 +37,6 @@ export default function HomePage() {
   useEffect(() => {
     if (authLoading || bizLoading || ownerLoading) return;
     if (!user) router.replace('/login');
-    // Only redirect to onboarding for non-owners — owners without a business should
-    // select one from settings instead of being sent to create a new one.
     else if (!business && !isOwner) router.replace('/onboarding');
   }, [user, business, isOwner, authLoading, bizLoading, ownerLoading, router]);
 
@@ -44,28 +54,31 @@ export default function HomePage() {
   }, [items, selectedCategory, search]);
 
   const lowStock = items.filter((i) => i.stock === 0 || (i.minStock > 0 && i.stock < i.minStock));
+  const totalValue = items.reduce((sum, i) => sum + (i.stock * (i.price || 0)), 0);
 
   if (authLoading || bizLoading || ownerLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-2 border-indigo-200 border-t-indigo-500 animate-spin-smooth" />
+        <div className="w-8 h-8 rounded-full border-2 border-muted-foreground/20 border-t-foreground animate-spin-smooth" />
       </div>
     );
   }
   if (!user) return null;
 
-  // Owner with no business selected — prompt them to pick one from settings
+  // Owner with no business selected
   if (isOwner && !business) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center pb-28 px-6 gap-5 text-center">
-        <div className="text-5xl">🏪</div>
+        <div className="w-20 h-20 bg-secondary rounded-2xl flex items-center justify-center">
+          <Package className="w-10 h-10 text-muted-foreground" />
+        </div>
         <div>
-          <p className="text-lg font-bold text-gray-900 mb-1">אין עסק פעיל</p>
-          <p className="text-sm text-gray-500">בחר עסק לניהול מהגדרות</p>
+          <p className="text-lg font-bold text-foreground mb-1">אין עסק פעיל</p>
+          <p className="text-sm text-muted-foreground">בחר עסק לניהול מהגדרות</p>
         </div>
         <button
           onClick={() => router.push('/settings')}
-          className="press bg-gray-900 text-white px-6 py-3 rounded-2xl text-sm font-medium shadow-lg shadow-gray-900/15"
+          className="press bg-primary text-primary-foreground px-6 py-3 rounded-2xl text-sm font-medium shadow-lg shadow-primary/20"
         >
           עבור להגדרות
         </button>
@@ -77,47 +90,104 @@ export default function HomePage() {
   if (!business) return null;
 
   return (
-    <div className="min-h-screen pb-28">
+    <div className="min-h-screen pb-28 bg-background">
       {/* Header */}
-      <div className="glass-strong sticky top-0 z-10 px-4 pt-12 pb-3">
-        <div className="flex items-center justify-between mb-2 animate-slide-down">
+      <motion.header
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="sticky top-0 z-20 bg-card/95 backdrop-blur-lg border-b border-border px-4 pt-12 pb-4"
+      >
+        {/* Top Row */}
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => router.push('/home/stockcount')}
-              className="press px-3 py-1.5 glass rounded-xl text-xs font-medium text-gray-600"
+            <Link
+              href="/home/stockcount"
+              className="press px-3 py-2 bg-secondary rounded-xl text-sm font-medium text-secondary-foreground flex items-center gap-1.5"
             >
-              📊 ספירה
-            </button>
-            <button
-              onClick={() => router.push('/home/reports')}
-              className="press px-3 py-1.5 glass rounded-xl text-xs font-medium text-gray-600"
+              <ClipboardList className="w-4 h-4" />
+              <span>ספירה</span>
+            </Link>
+            <Link
+              href="/home/reports"
+              className="press px-3 py-2 bg-secondary rounded-xl text-sm font-medium text-secondary-foreground flex items-center gap-1.5"
             >
-              📋 דוח
-            </button>
+              <TrendingUp className="w-4 h-4" />
+              <span>דוח</span>
+            </Link>
           </div>
           <div className="text-right">
-            <p className="text-sm font-medium text-gray-700">{business.name}</p>
-            <p className="text-xs text-gray-400">{items.length} פריטים</p>
+            <h1 className="text-lg font-bold text-foreground">{business.name}</h1>
+            <p className="text-sm text-muted-foreground">{items.length} פריטים</p>
           </div>
         </div>
 
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.1 }}
+            className="bg-secondary rounded-2xl p-3"
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <Package className="w-4 h-4 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">שווי מלאי</span>
+            </div>
+            <p className="text-lg font-bold text-foreground">{totalValue.toLocaleString()} ₪</p>
+          </motion.div>
+
+          {lowStock.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.15 }}
+              className="bg-warning/10 border border-warning/20 rounded-2xl p-3"
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <AlertTriangle className="w-4 h-4 text-warning" />
+                <span className="text-xs text-warning">דורש תשומת לב</span>
+              </div>
+              <p className="text-lg font-bold text-warning-foreground">{lowStock.length} פריטים</p>
+            </motion.div>
+          )}
+        </div>
+
+        {/* Low Stock Alert - Scrollable */}
         {lowStock.length > 0 && (
-          <div className="bg-amber-50 border border-amber-100 rounded-2xl px-3 py-2.5 text-sm flex items-center gap-2 animate-slide-down delay-50">
-            <span className="text-amber-500 text-base">⚠️</span>
-            <span className="text-amber-700 font-medium">{lowStock.length} פריטים דורשים תשומת לב</span>
-          </div>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-4"
+          >
+            {lowStock.slice(0, 5).map((item) => (
+              <Link
+                key={item.id}
+                href={`/home/item/${item.id}`}
+                className="press flex-shrink-0 flex items-center gap-2 bg-warning/10 border border-warning/20 rounded-xl px-3 py-2"
+              >
+                <div className={`w-2 h-2 rounded-full ${item.stock === 0 ? 'bg-destructive' : 'bg-warning'}`} />
+                <span className="text-sm font-medium text-foreground whitespace-nowrap">{item.name}</span>
+                <span className="text-xs text-muted-foreground">{item.stock} {item.unit}</span>
+              </Link>
+            ))}
+          </motion.div>
         )}
-      </div>
+      </motion.header>
 
       {/* Reorder Suggestions */}
       {reorderSuggestions.length > 0 && (
-        <div className="px-4 pt-3 animate-slide-up delay-50">
-          <div className="glass rounded-2xl p-4">
+        <div className="px-4 pt-4">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-card border border-border rounded-2xl p-4"
+          >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs text-gray-400">{reorderSuggestions.length} הצעות</span>
+              <span className="text-xs text-muted-foreground">{reorderSuggestions.length} הצעות</span>
               <div className="flex items-center gap-1.5">
-                <span className="text-base">📋</span>
-                <h2 className="text-sm font-semibold text-gray-800">הצעות הזמנה</h2>
+                <ShoppingCart className="w-4 h-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold text-foreground">הצעות הזמנה</h2>
               </div>
             </div>
             <div className="space-y-2">
@@ -125,86 +195,135 @@ export default function HomePage() {
                 <ReorderCard key={s.id} suggestion={s} onTap={() => router.push(`/home/item/${s.itemId}`)} />
               ))}
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
 
       {/* Search */}
-      <div className="px-4 pt-3 pb-1 animate-fade-in">
-        <div className="relative">
+      <div className="px-4 pt-4 pb-2">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="relative"
+        >
+          <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="חיפוש לפי שם, ספק, מק״ט..."
-            className="w-full glass rounded-2xl px-4 py-3 text-right text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent transition-all pr-10"
+            className="w-full bg-secondary border border-border rounded-2xl px-4 py-3.5 pr-12 text-right text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all placeholder:text-muted-foreground"
           />
-          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-300 text-base">🔍</span>
-        </div>
-      </div>
-
-      {/* Category chips */}
-      <div className="px-4 py-2 flex gap-2 overflow-x-auto no-scrollbar animate-fade-in delay-50">
-        {categories.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setSelectedCategory(cat)}
-            className={`press flex-shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
-              selectedCategory === cat
-                ? 'bg-gray-900 text-white shadow-md shadow-gray-900/15'
-                : 'glass text-gray-600'
-            }`}
-          >
-            {cat}{cat === 'הכל' ? ` · ${items.length}` : ''}
+          <button className="absolute left-3 top-1/2 -translate-y-1/2 p-1.5 hover:bg-muted rounded-lg transition-colors">
+            <Filter className="w-4 h-4 text-muted-foreground" />
           </button>
-        ))}
+        </motion.div>
       </div>
 
-      {/* Items */}
-      <div className="px-4 space-y-2 mt-1">
-        {itemsLoading && (
+      {/* Category Chips */}
+      <div className="px-4 py-2">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          className="flex gap-2 overflow-x-auto no-scrollbar"
+        >
+          {categories.map((cat, i) => (
+            <motion.button
+              key={cat}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3 + i * 0.05 }}
+              onClick={() => setSelectedCategory(cat)}
+              className={`press flex-shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
+                selectedCategory === cat
+                  ? 'bg-primary text-primary-foreground shadow-md'
+                  : 'bg-secondary text-secondary-foreground hover:bg-muted'
+              }`}
+            >
+              {cat}
+              {cat === 'הכל' && <span className="mr-1 text-xs opacity-70">({items.length})</span>}
+            </motion.button>
+          ))}
+        </motion.div>
+      </div>
+
+      {/* Items List */}
+      <div className="px-4 py-2 space-y-3">
+        {itemsLoading ? (
           <div className="flex justify-center py-12">
-            <div className="w-7 h-7 rounded-full border-2 border-indigo-200 border-t-indigo-400 animate-spin-smooth" />
+            <div className="w-7 h-7 rounded-full border-2 border-muted-foreground/20 border-t-foreground animate-spin-smooth" />
           </div>
-        )}
-        {!itemsLoading && filtered.length === 0 && (
-          <div className="text-center py-16 animate-scale-in">
-            <div className="text-5xl mb-4">{search ? '🔍' : '📦'}</div>
-            <p className="text-gray-400 mb-5 text-sm">{search ? 'לא נמצאו תוצאות' : 'עדיין אין פריטים במלאי'}</p>
-            {!search && (
-              <button
-                onClick={() => router.push('/home/add')}
-                className="press bg-gray-900 text-white px-6 py-3 rounded-2xl text-sm font-medium shadow-lg shadow-gray-900/15"
+        ) : (
+          <AnimatePresence mode="popLayout">
+            {filtered.length === 0 ? (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="text-center py-16"
               >
-                + הוסף פריט ראשון
-              </button>
+                <div className="w-16 h-16 mx-auto mb-4 bg-secondary rounded-2xl flex items-center justify-center">
+                  {search ? <Search className="w-8 h-8 text-muted-foreground" /> : <Package className="w-8 h-8 text-muted-foreground" />}
+                </div>
+                <p className="text-muted-foreground mb-5">
+                  {search ? 'לא נמצאו תוצאות' : 'עדיין אין פריטים במלאי'}
+                </p>
+                {!search && (
+                  <Link
+                    href="/home/add"
+                    className="press inline-flex items-center gap-2 bg-primary text-primary-foreground px-6 py-3 rounded-2xl font-medium shadow-lg shadow-primary/20"
+                  >
+                    <Plus className="w-5 h-5" />
+                    <span>הוסף פריט ראשון</span>
+                  </Link>
+                )}
+              </motion.div>
+            ) : (
+              filtered.map((item, i) => (
+                <ItemCard key={item.id} item={item} businessId={business.id} index={i} />
+              ))
             )}
-          </div>
+          </AnimatePresence>
         )}
-        {filtered.map((item, i) => (
-          <ItemCard key={item.id} item={item} businessId={business.id} index={i} />
-        ))}
       </div>
 
       {/* Invoice Log */}
       {invoiceLog.length > 0 && (
-        <div className="px-4 mt-4 mb-2 animate-fade-in">
-          <div className="glass rounded-2xl p-4">
+        <div className="px-4 mt-4 mb-2">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-card border border-border rounded-2xl p-4"
+          >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs text-gray-400">אחרונות</span>
-              <div className="flex items-center gap-1.5">
-                <span className="text-base">📩</span>
-                <h2 className="text-sm font-semibold text-gray-800">יבואי חשבוניות</h2>
-              </div>
+              <span className="text-xs text-muted-foreground">אחרונות</span>
+              <h2 className="text-sm font-semibold text-foreground">יבואי חשבוניות</h2>
             </div>
             <div className="space-y-2">
               {invoiceLog.map((entry) => (
                 <InvoiceLogCard key={entry.id} entry={entry} />
               ))}
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
+
+      {/* Floating Add Button */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.5, type: 'spring', stiffness: 260, damping: 20 }}
+        className="fixed bottom-24 left-4 z-30"
+      >
+        <Link
+          href="/home/add"
+          className="press flex items-center justify-center w-14 h-14 bg-primary text-primary-foreground rounded-2xl shadow-xl shadow-primary/30"
+        >
+          <Plus className="w-6 h-6" />
+        </Link>
+      </motion.div>
 
       <BottomNav />
     </div>
@@ -215,19 +334,19 @@ function ReorderCard({ suggestion, onTap }: { suggestion: ReorderSuggestion; onT
   return (
     <button
       onClick={onTap}
-      className="press w-full flex items-center gap-3 bg-indigo-50/60 border border-indigo-100 rounded-xl px-3 py-2.5 text-right"
+      className="press w-full flex items-center gap-3 bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-right"
     >
-      <span className="text-lg flex-shrink-0">🛒</span>
+      <ShoppingCart className="w-5 h-5 text-muted-foreground flex-shrink-0" />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-900 truncate">{suggestion.itemName}</p>
-        <p className="text-xs text-gray-400">
+        <p className="text-sm font-medium text-foreground truncate">{suggestion.itemName}</p>
+        <p className="text-xs text-muted-foreground">
           מלאי: {suggestion.currentStock} {suggestion.unit} · מינ׳: {suggestion.minStock}
         </p>
       </div>
       <div className="flex-shrink-0 text-right">
-        <p className="text-xs font-semibold text-indigo-600">הזמן {suggestion.suggestedOrderQty}</p>
+        <p className="text-xs font-semibold text-foreground">הזמן {suggestion.suggestedOrderQty}</p>
         {suggestion.supplier && (
-          <p className="text-xs text-gray-400 truncate max-w-20">{suggestion.supplier}</p>
+          <p className="text-xs text-muted-foreground truncate max-w-20">{suggestion.supplier}</p>
         )}
       </div>
     </button>
@@ -246,22 +365,22 @@ function InvoiceLogCard({ entry }: { entry: InvoiceLogEntry }) {
     <div
       className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-right ${
         entry.status === 'error'
-          ? 'bg-red-50 border border-red-100'
-          : 'bg-emerald-50/60 border border-emerald-100'
+          ? 'bg-destructive/10 border border-destructive/20'
+          : 'bg-success/10 border border-success/20'
       }`}
     >
       <span className="text-lg flex-shrink-0">{entry.status === 'error' ? '❌' : '✅'}</span>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-900 truncate">
+        <p className="text-sm font-medium text-foreground truncate">
           {entry.supplier || 'ספק לא ידוע'}
         </p>
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-muted-foreground">
           {entry.status === 'error'
             ? entry.error ?? 'שגיאה בעיבוד'
             : `${entry.itemsUpdated} פריטים עודכנו`}
         </p>
       </div>
-      {timeStr && <p className="text-xs text-gray-300 flex-shrink-0">{timeStr}</p>}
+      {timeStr && <p className="text-xs text-muted-foreground flex-shrink-0">{timeStr}</p>}
     </div>
   );
 }

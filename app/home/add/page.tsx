@@ -1,6 +1,19 @@
 'use client';
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  ArrowRight,
+  Package,
+  Scale,
+  DollarSign,
+  Truck,
+  Hash,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  Check,
+} from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { useBusiness } from '@/hooks/useBusiness';
 import { useItems } from '@/hooks/useItems';
@@ -8,7 +21,7 @@ import { addItem } from '@/lib/firestore';
 import { DEFAULT_CATEGORIES, UNITS, ItemUnit } from '@/types';
 import { SupplierPicker } from '@/components/SupplierPicker';
 
-const inputCls = 'w-full bg-white/70 border border-gray-200 rounded-2xl px-4 py-3 text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent transition-all text-sm';
+const inputClass = 'w-full bg-input border border-border rounded-xl px-4 py-3 text-right focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all placeholder:text-muted-foreground';
 
 function stripUndefined<T extends object>(obj: T): Partial<T> {
   return Object.fromEntries(
@@ -16,10 +29,21 @@ function stripUndefined<T extends object>(obj: T): Partial<T> {
   ) as Partial<T>;
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+interface FormFieldProps {
+  label: string;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+  required?: boolean;
+}
+
+function FormField({ label, icon, children, required }: FormFieldProps) {
   return (
-    <div>
-      <label className="block text-xs font-semibold text-gray-500 text-right mb-1.5 uppercase tracking-wide">{label}</label>
+    <div className="space-y-2">
+      <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+        {icon}
+        <span>{label}</span>
+        {required && <span className="text-destructive">*</span>}
+      </label>
       {children}
     </div>
   );
@@ -29,7 +53,7 @@ export default function AddItemPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-2 border-indigo-200 border-t-indigo-500 animate-spin-smooth" />
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
       </div>
     }>
       <AddItemForm />
@@ -58,6 +82,7 @@ function AddItemForm() {
   const [targetStock, setTargetStock] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     const supplierParam = searchParams.get('supplier');
@@ -83,77 +108,135 @@ function AddItemForm() {
     };
     await addItem(business.id, itemData);
     setSaving(false);
-    router.back();
+    setSaved(true);
+    setTimeout(() => {
+      router.back();
+    }, 500);
   }
 
   return (
-    <div className="min-h-screen pb-28">
-      <div className="glass-strong sticky top-0 z-10 px-4 pt-12 pb-4 flex items-center gap-3 animate-slide-down">
-        <button
-          onClick={() => router.back()}
-          className="press w-9 h-9 rounded-xl bg-white/70 border border-gray-200 flex items-center justify-center text-gray-600 shadow-sm"
-        >
-          ←
-        </button>
-        <h1 className="text-lg font-bold text-gray-900 flex-1 text-right">פריט חדש</h1>
-      </div>
+    <div className="min-h-screen bg-background pb-28">
+      {/* Header */}
+      <motion.header
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="sticky top-0 z-20 bg-card/95 backdrop-blur-lg border-b border-border px-4 pt-12 pb-4"
+      >
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.back()}
+            className="press w-10 h-10 rounded-xl bg-secondary border border-border flex items-center justify-center text-foreground hover:bg-muted transition-colors"
+          >
+            <ArrowRight className="w-5 h-5" />
+          </button>
+          <h1 className="text-xl font-bold text-foreground flex-1 text-right">פריט חדש</h1>
+        </div>
+      </motion.header>
 
-      <div className="px-4 py-4 space-y-4 animate-slide-up">
-        {/* Name */}
-        <div className="glass rounded-3xl p-4">
-          <Field label="שם פריט *">
+      <div className="p-4 space-y-4">
+        {/* Name Section */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-card border border-border rounded-2xl p-4"
+        >
+          <FormField label="שם פריט" icon={<Package className="w-4 h-4 text-muted-foreground" />} required>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="לחם, עגבניות..."
-              className={inputCls}
+              className={inputClass}
               autoFocus
             />
-          </Field>
-        </div>
+          </FormField>
+        </motion.section>
 
-        {/* Category */}
-        <div className="glass rounded-3xl p-4">
-          <Field label="קטגוריה">
-            <div className="flex flex-wrap gap-2 justify-end mt-1">
-              {DEFAULT_CATEGORIES.map((c) => (
+        {/* Category Section */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="bg-card border border-border rounded-2xl p-4"
+        >
+          <FormField label="קטגוריה">
+            <div className="flex flex-wrap gap-2 mt-2">
+              {DEFAULT_CATEGORIES.map((cat) => (
                 <button
-                  key={c}
-                  onClick={() => setCategory(c)}
-                  className={`press px-3 py-1.5 rounded-xl text-sm border transition-all duration-200 ${
-                    category === c
-                      ? 'bg-gray-900 text-white border-gray-900 shadow-md shadow-gray-900/15'
-                      : 'bg-white/70 border-gray-200 text-gray-600'
+                  key={cat}
+                  type="button"
+                  onClick={() => setCategory(cat)}
+                  className={`press px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
+                    category === cat
+                      ? 'bg-primary text-primary-foreground shadow-md'
+                      : 'bg-secondary text-secondary-foreground hover:bg-muted'
                   }`}
                 >
-                  {c}
+                  {cat}
                 </button>
               ))}
             </div>
-          </Field>
-        </div>
+          </FormField>
+        </motion.section>
 
-        {/* Main fields */}
-        <div className="glass rounded-3xl p-4 space-y-4">
-          <Field label="יחידת מידה">
-            <select value={unit} onChange={(e) => setUnit(e.target.value as ItemUnit)} className={inputCls}>
-              {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+        {/* Main Fields Section */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-card border border-border rounded-2xl p-4 space-y-4"
+        >
+          <FormField label="יחידת מידה" icon={<Scale className="w-4 h-4 text-muted-foreground" />}>
+            <select
+              value={unit}
+              onChange={(e) => setUnit(e.target.value as ItemUnit)}
+              className={inputClass}
+            >
+              {UNITS.map((u) => (
+                <option key={u} value={u}>{u}</option>
+              ))}
             </select>
-          </Field>
+          </FormField>
+
           <div className="grid grid-cols-2 gap-3">
-            <Field label="כמות נוכחית">
-              <input type="number" inputMode="decimal" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="0" className={inputCls} />
-            </Field>
-            <Field label="מינ׳ התראה">
-              <input type="number" inputMode="decimal" value={minStock} onChange={(e) => setMinStock(e.target.value)} placeholder="0" className={inputCls} />
-            </Field>
+            <FormField label="כמות נוכחית">
+              <input
+                type="number"
+                inputMode="decimal"
+                value={stock}
+                onChange={(e) => setStock(e.target.value)}
+                placeholder="0"
+                className={inputClass}
+              />
+            </FormField>
+            <FormField label="מינ׳ התראה">
+              <input
+                type="number"
+                inputMode="decimal"
+                value={minStock}
+                onChange={(e) => setMinStock(e.target.value)}
+                placeholder="0"
+                className={inputClass}
+              />
+            </FormField>
           </div>
+
           <div className="grid grid-cols-2 gap-3">
-            <Field label='מחיר (₪)'>
-              <input type="number" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" className={inputCls} />
-            </Field>
-            <Field label="ספק">
+            <FormField label='מחיר (₪)' icon={<DollarSign className="w-4 h-4 text-muted-foreground" />}>
+              <div className="relative">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  placeholder="0.00"
+                  className={`${inputClass} pl-12`}
+                />
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₪</span>
+              </div>
+            </FormField>
+            <FormField label="ספק" icon={<Truck className="w-4 h-4 text-muted-foreground" />}>
               {business ? (
                 <SupplierPicker
                   businessId={business.id}
@@ -162,62 +245,139 @@ function AddItemForm() {
                   onChange={setSupplier}
                 />
               ) : (
-                <input type="text" value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="שם הספק" className={inputCls} />
+                <input
+                  type="text"
+                  value={supplier}
+                  onChange={(e) => setSupplier(e.target.value)}
+                  placeholder="שם הספק"
+                  className={inputClass}
+                />
               )}
-            </Field>
+            </FormField>
           </div>
-          <Field label='מק"ט'>
-            <input type="text" value={sku} onChange={(e) => setSku(e.target.value)} placeholder="אופציונלי" className={inputCls} />
-          </Field>
-        </div>
 
-        {/* Advanced settings collapsible */}
-        <div className="glass rounded-3xl overflow-hidden">
+          <FormField label='מק"ט / ברקוד' icon={<Hash className="w-4 h-4 text-muted-foreground" />}>
+            <input
+              type="text"
+              value={sku}
+              onChange={(e) => setSku(e.target.value)}
+              placeholder="אופציונלי"
+              className={inputClass}
+            />
+          </FormField>
+        </motion.section>
+
+        {/* Advanced Settings */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="bg-card border border-border rounded-2xl overflow-hidden"
+        >
           <button
+            type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className="press w-full flex items-center justify-between p-4 text-right"
+            className="press w-full flex items-center justify-between p-4"
           >
-            <span className="text-indigo-500 text-sm">{showAdvanced ? '▲' : '▼'}</span>
-            <span className="text-sm font-medium text-gray-700">הגדרות מתקדמות</span>
+            <motion.div
+              animate={{ rotate: showAdvanced ? 180 : 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              {showAdvanced
+                ? <ChevronUp className="w-5 h-5 text-muted-foreground" />
+                : <ChevronDown className="w-5 h-5 text-muted-foreground" />
+              }
+            </motion.div>
+            <span className="text-sm font-medium text-foreground">הגדרות מתקדמות</span>
           </button>
-          {showAdvanced && (
-            <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
-              <div className="grid grid-cols-2 gap-3 mt-4">
-                <Field label="מלאי תקן">
-                  <input type="number" inputMode="decimal" value={targetStock} onChange={(e) => setTargetStock(e.target.value)} placeholder="יעד מלאי" className={inputCls} />
-                </Field>
-                <Field label="כמות במארז">
-                  <input type="number" inputMode="decimal" value={packSize} onChange={(e) => setPackSize(e.target.value)} placeholder="יח׳ במארז" className={inputCls} />
-                </Field>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="מינ׳ הזמנה">
-                  <input type="number" inputMode="decimal" value={minOrder} onChange={(e) => setMinOrder(e.target.value)} placeholder="כמות מינ׳" className={inputCls} />
-                </Field>
-                <Field label="ימי אספקה">
-                  <input type="number" inputMode="numeric" value={deliveryDays} onChange={(e) => setDeliveryDays(e.target.value)} placeholder="ימים" className={inputCls} />
-                </Field>
-              </div>
-            </div>
-          )}
-        </div>
+
+          <AnimatePresence>
+            {showAdvanced && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="p-4 pt-0 space-y-4 border-t border-border">
+                  <div className="grid grid-cols-2 gap-3 mt-4">
+                    <FormField label="מלאי תקן">
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={targetStock}
+                        onChange={(e) => setTargetStock(e.target.value)}
+                        placeholder="יעד מלאי"
+                        className={inputClass}
+                      />
+                    </FormField>
+                    <FormField label="כמות במארז">
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={packSize}
+                        onChange={(e) => setPackSize(e.target.value)}
+                        placeholder="יח׳ במארז"
+                        className={inputClass}
+                      />
+                    </FormField>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField label="מינ׳ הזמנה">
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={minOrder}
+                        onChange={(e) => setMinOrder(e.target.value)}
+                        placeholder="כמות מינ׳"
+                        className={inputClass}
+                      />
+                    </FormField>
+                    <FormField label="ימי אספקה">
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        value={deliveryDays}
+                        onChange={(e) => setDeliveryDays(e.target.value)}
+                        placeholder="ימים"
+                        className={inputClass}
+                      />
+                    </FormField>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.section>
       </div>
 
-      {/* Save */}
-      <div className="glass-nav fixed bottom-0 right-0 left-0 p-4">
+      {/* Save Button - Fixed Bottom */}
+      <motion.div
+        initial={{ y: 100 }}
+        animate={{ y: 0 }}
+        className="fixed bottom-0 right-0 left-0 p-4 bg-card/95 backdrop-blur-lg border-t border-border"
+      >
         <button
           onClick={handleSave}
-          disabled={saving || !name.trim()}
-          className="press w-full bg-gradient-to-br from-gray-900 to-gray-800 text-white py-4 rounded-2xl font-medium text-base shadow-lg shadow-gray-900/20 disabled:opacity-50"
+          disabled={saving || !name.trim() || saved}
+          className="press w-full bg-primary text-primary-foreground py-4 rounded-2xl font-medium shadow-lg shadow-primary/20 disabled:opacity-60 transition-all flex items-center justify-center gap-2"
         >
           {saving ? (
-            <span className="flex items-center justify-center gap-2">
-              <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin-smooth" />
-              שומר...
-            </span>
-          ) : '+ הוסף פריט'}
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>שומר...</span>
+            </>
+          ) : saved ? (
+            <>
+              <Check className="w-5 h-5" />
+              <span>נשמר!</span>
+            </>
+          ) : (
+            <span>+ הוסף פריט</span>
+          )}
         </button>
-      </div>
+      </motion.div>
     </div>
   );
 }
