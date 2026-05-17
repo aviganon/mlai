@@ -58,6 +58,7 @@ export interface MlaiUser {
   role: 'owner' | 'buyer' | 'employee' | 'manager';
   lastSeen: Date;
   createdAt: Date;
+  inviteEmail?: string;
 }
 
 export interface Domain {

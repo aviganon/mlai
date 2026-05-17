@@ -262,8 +262,9 @@ export default function PosPage() {
       {/* Header */}
       <div className="glass-strong sticky top-0 z-10 px-4 pt-12 pb-3 animate-slide-down">
         <div className="flex items-center justify-between">
-          <InvoiceNotificationBadge businessId={business.id} />
+          <div />
           <div className="flex items-center gap-2">
+            <InvoiceNotificationBadge businessId={business.id} />
             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center flex-shrink-0">
               <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M9 14.25l6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0c1.1.128 1.907 1.077 1.907 2.185z" />

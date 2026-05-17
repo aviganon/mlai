@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/components/AuthProvider';
 import { useBusiness } from '@/hooks/useBusiness';
@@ -82,6 +82,15 @@ export default function SettingsPage() {
   const [addUserSuccess, setAddUserSuccess] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
+
+  // User detail panel
+  const [selectedUser, setSelectedUser] = useState<MlaiUser | null>(null);
+  const [editUserName, setEditUserName] = useState('');
+  const [editUserRole, setEditUserRole] = useState<'employee' | 'manager'>('employee');
+  const [editUserIsOwner, setEditUserIsOwner] = useState(false);
+  const [editUserBusinessId, setEditUserBusinessId] = useState('');
+  const [savingUserEdit, setSavingUserEdit] = useState(false);
+  const [userLinkCopied, setUserLinkCopied] = useState(false);
 
   // Registration code
   const [regCode, setRegCode] = useState('');
@@ -186,6 +195,8 @@ export default function SettingsPage() {
       if (newUserBusinessId && newUserRole === 'employee') {
         await addPendingMember(newUserBusinessId, newUserEmail.trim());
       }
+      const link = `https://mlai.vercel.app/register?email=${encodeURIComponent(newUserEmail.trim())}`;
+      await updateDoc(doc(db, 'mlaiUsers', uid), { inviteEmail: link });
       const newUser: MlaiUser = {
         uid,
         email: newUserEmail.trim(),
@@ -193,9 +204,9 @@ export default function SettingsPage() {
         isOwner: newUserIsOwner,
         businessId: newUserBusinessId || null,
         role: newUserRole,
+        inviteEmail: link,
       } as MlaiUser;
       setUsers((prev) => [newUser, ...prev]);
-      const link = `https://mlai.galis.app/join?email=${encodeURIComponent(newUserEmail.trim())}`;
       setInviteLink(link);
       setAddUserSuccess(true);
       setTimeout(() => {
@@ -227,6 +238,30 @@ export default function SettingsPage() {
     setPanelEditName(biz.name);
     setPanelEditingName(false);
     setPanelConfirmDelete(false);
+  }
+
+  function openUserPanel(u: MlaiUser) {
+    setSelectedUser(u);
+    setEditUserName(u.displayName ?? '');
+    setEditUserRole(u.role === 'manager' ? 'manager' : 'employee');
+    setEditUserIsOwner(u.isOwner);
+    setEditUserBusinessId(u.businessId ?? '');
+    setUserLinkCopied(false);
+  }
+
+  async function handleSaveUserEdit() {
+    if (!selectedUser || !editUserName.trim()) return;
+    setSavingUserEdit(true);
+    await updateDoc(doc(db, 'mlaiUsers', selectedUser.uid), {
+      displayName: editUserName.trim(),
+      role: editUserRole,
+      isOwner: editUserIsOwner,
+      businessId: editUserBusinessId || null,
+    });
+    const updated = { ...selectedUser, displayName: editUserName.trim(), role: editUserRole, isOwner: editUserIsOwner, businessId: editUserBusinessId || null };
+    setUsers((prev) => prev.map((u) => u.uid === selectedUser.uid ? updated : u));
+    setSelectedUser(updated);
+    setSavingUserEdit(false);
   }
 
   async function handleSaveInvoiceEmail() {
@@ -716,10 +751,14 @@ export default function SettingsPage() {
                   {users.map((u) => (
                     <div key={u.uid} className="glass rounded-2xl p-4 flex items-center gap-3 animate-fade-in">
                       <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${isOnline(u.lastSeen) ? 'bg-emerald-400' : 'bg-gray-300'}`} />
-                      <div className="flex-1 min-w-0 text-right">
+                      <button
+                        type="button"
+                        onClick={() => openUserPanel(u)}
+                        className="flex-1 min-w-0 text-right"
+                      >
                         <p className="text-sm font-medium text-gray-900 truncate">{u.displayName ?? u.email}</p>
                         <p className="text-xs text-gray-400 truncate">{u.email}</p>
-                      </div>
+                      </button>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <div className="text-right">
                           <p className="text-xs text-gray-500">{formatLastSeen(u.lastSeen)}</p>
@@ -938,6 +977,139 @@ export default function SettingsPage() {
         </div>
 
         <BottomNav />
+
+        {/* User Detail Panel */}
+        {selectedUser && (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center"
+            onClick={(e) => { if (e.target === e.currentTarget) setSelectedUser(null); }}
+          >
+            <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setSelectedUser(null)} />
+            <div className="relative w-full max-w-lg glass-strong rounded-t-3xl px-5 pt-5 pb-10 animate-slide-up shadow-2xl max-h-[85vh] overflow-y-auto">
+              <div className="w-10 h-1 rounded-full bg-gray-300 mx-auto mb-5" />
+              <div className="flex items-center justify-between mb-5" dir="rtl">
+                <button
+                  onClick={() => setSelectedUser(null)}
+                  className="press w-8 h-8 rounded-xl glass flex items-center justify-center text-gray-400 text-sm"
+                >
+                  ✕
+                </button>
+                <h2 className="text-lg font-bold text-gray-900 truncate flex-1 text-right mr-3">
+                  {selectedUser.displayName ?? selectedUser.email}
+                </h2>
+              </div>
+
+              <div className="space-y-4" dir="rtl">
+                {/* User info */}
+                <div className="glass rounded-2xl p-4 space-y-2">
+                  <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">פרטי משתמש</p>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-sm text-gray-500">אימייל</span>
+                    <span className="text-sm font-medium text-gray-900 truncate max-w-[60%]">{selectedUser.email}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">תפקיד</span>
+                    <span className="text-sm font-medium text-gray-900">{selectedUser.role === 'manager' ? 'מנהל' : 'עובד'}</span>
+                  </div>
+                  {selectedUser.businessId && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-500">עסק</span>
+                      <span className="text-sm font-medium text-gray-900 truncate max-w-[60%]">
+                        {businesses.find((b) => b.id === selectedUser.businessId)?.name ?? selectedUser.businessId}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">נראה לאחרונה</span>
+                    <span className="text-sm text-gray-600">{formatLastSeen(selectedUser.lastSeen)}</span>
+                  </div>
+                  {selectedUser.isOwner && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-medium">בעלים</span>
+                      <span className="text-sm text-gray-500">סטטוס</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Invite link */}
+                {selectedUser.email && (
+                  <div className="glass rounded-2xl p-4 space-y-2">
+                    <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">קישור הזמנה</p>
+                    <p className="text-xs text-indigo-600 break-all font-mono bg-indigo-50 rounded-lg px-2 py-1.5 select-all">
+                      {`https://mlai.vercel.app/register?email=${encodeURIComponent(selectedUser.email)}`}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`https://mlai.vercel.app/register?email=${encodeURIComponent(selectedUser.email ?? '')}`);
+                        setUserLinkCopied(true);
+                        setTimeout(() => setUserLinkCopied(false), 2000);
+                      }}
+                      className="press w-full py-2 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 text-xs font-semibold"
+                    >
+                      {userLinkCopied ? '✅ הועתק!' : '📋 העתק קישור'}
+                    </button>
+                  </div>
+                )}
+
+                {/* Edit form */}
+                <div className="glass rounded-2xl p-4 space-y-3">
+                  <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">עריכה</p>
+                  <input
+                    type="text"
+                    value={editUserName}
+                    onChange={(e) => setEditUserName(e.target.value)}
+                    placeholder="שם מלא"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white/70"
+                  />
+                  <select
+                    value={editUserRole}
+                    onChange={(e) => {
+                      const role = e.target.value as 'employee' | 'manager';
+                      setEditUserRole(role);
+                      if (role === 'employee') setEditUserIsOwner(false);
+                    }}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white/70 appearance-none"
+                    dir="rtl"
+                  >
+                    <option value="employee">עובד</option>
+                    <option value="manager">מנהל</option>
+                  </select>
+                  <select
+                    value={editUserBusinessId}
+                    onChange={(e) => setEditUserBusinessId(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white/70 appearance-none"
+                    dir="rtl"
+                  >
+                    <option value="">ללא שיוך לעסק</option>
+                    {businesses.map((biz) => (
+                      <option key={biz.id} value={biz.id}>{biz.name}</option>
+                    ))}
+                  </select>
+                  {editUserRole === 'manager' && (
+                    <label className="flex items-center justify-between gap-3 px-3 py-2.5 bg-white/70 border border-gray-200 rounded-xl cursor-pointer">
+                      <span className="text-sm text-gray-700">הרשאות בעלים במערכת</span>
+                      <input
+                        type="checkbox"
+                        checked={editUserIsOwner}
+                        onChange={(e) => setEditUserIsOwner(e.target.checked)}
+                        className="w-4 h-4 accent-indigo-600 rounded"
+                      />
+                    </label>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleSaveUserEdit}
+                    disabled={savingUserEdit || !editUserName.trim()}
+                    className="press w-full py-2.5 rounded-xl bg-gray-900 text-white text-xs font-semibold disabled:opacity-50"
+                  >
+                    {savingUserEdit ? 'שומר...' : 'שמור שינויים'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Business Detail Panel */}
         {selectedBiz && (

@@ -206,15 +206,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* FAB */}
-      <button
-        onClick={() => router.push('/home/add')}
-        className="press fixed bottom-24 end-4 w-14 h-14 bg-gradient-to-br from-indigo-500 to-violet-600 text-white rounded-full flex items-center justify-center text-3xl shadow-xl shadow-indigo-300/50 z-10"
-        aria-label="הוסף פריט"
-      >
-        +
-      </button>
-
       <BottomNav />
     </div>
   );
