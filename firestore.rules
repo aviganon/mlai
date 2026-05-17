@@ -18,33 +18,37 @@ service cloud.firestore {
         get(/databases/$(database)/documents/mlaiUsers/$(request.auth.uid)).data.isOwner == true;
     }
 
-    // mlaiUsers – each user can read/write only their own doc
-    match /mlaiUsers/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // mlaiDomains – only mlai owners
+    match /mlaiDomains/{domainId} {
+      allow read, write, delete: if isMlaiOwner();
     }
 
-    // businesses – owner or member
+    // mlaiUsers – own doc OR mlai owner
+    match /mlaiUsers/{userId} {
+      allow read: if request.auth != null && (request.auth.uid == userId || isMlaiOwner());
+      allow create: if request.auth != null && (request.auth.uid == userId || isMlaiOwner());
+      allow update, delete: if request.auth != null && (request.auth.uid == userId || isMlaiOwner());
+    }
+
+    // businesses – owner or member OR mlai owner
     match /businesses/{businessId} {
-      allow read, write: if isMember(businessId);
+      allow create: if request.auth != null;
+      allow read, write, delete: if isMlaiOwner() || isMember(businessId);
 
-      // items subcollection
       match /items/{itemId} {
-        allow read, write: if isMember(businessId);
+        allow read, write, delete: if isMlaiOwner() || isMember(businessId);
       }
 
-      // purchaseOrders subcollection
       match /purchaseOrders/{orderId} {
-        allow read, write: if isMember(businessId);
+        allow read, write, delete: if isMlaiOwner() || isMember(businessId);
       }
 
-      // supplierDetails subcollection
       match /supplierDetails/{supplierId} {
-        allow read, write: if isMember(businessId);
+        allow read, write, delete: if isMlaiOwner() || isMember(businessId);
       }
 
-      // catch-all for any other subcollections under a business
       match /{subcollection}/{docId} {
-        allow read, write: if isMember(businessId);
+        allow read, write, delete: if isMlaiOwner() || isMember(businessId);
       }
     }
 
