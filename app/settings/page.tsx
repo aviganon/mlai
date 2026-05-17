@@ -7,7 +7,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { useBusiness } from '@/hooks/useBusiness';
 import { useIsOwner } from '@/hooks/useIsOwner';
 import { signOutUser } from '@/lib/auth';
-import { getAllBusinesses, adminDeleteBusiness, adminUpdateBusiness, updateBusinessInvoiceEmail, updateBusinessSalesEmail } from '@/lib/firestore';
+import { getAllBusinesses, adminDeleteBusiness, adminUpdateBusiness } from '@/lib/firestore';
 import { createBusiness, createPendingUser, addPendingMember } from '@/lib/adminFirestore';
 import { getAllUsers } from '@/lib/users';
 import { setUserOwner } from '@/lib/userOwner';
@@ -55,10 +55,6 @@ export default function SettingsPage() {
 
   // Business detail panel
   const [selectedBiz, setSelectedBiz] = useState<Business | null>(null);
-  const [panelInvoiceEmail, setPanelInvoiceEmail] = useState('');
-  const [panelSalesEmail, setPanelSalesEmail] = useState('');
-  const [savingEmail, setSavingEmail] = useState(false);
-  const [savingSalesEmail, setSavingSalesEmail] = useState(false);
   const [panelEditName, setPanelEditName] = useState('');
   const [panelEditingName, setPanelEditingName] = useState(false);
   const [panelConfirmDelete, setPanelConfirmDelete] = useState(false);
@@ -233,8 +229,6 @@ export default function SettingsPage() {
 
   function openBizPanel(biz: Business) {
     setSelectedBiz(biz);
-    setPanelInvoiceEmail(biz.invoiceEmail ?? '');
-    setPanelSalesEmail(biz.salesEmail ?? '');
     setPanelEditName(biz.name);
     setPanelEditingName(false);
     setPanelConfirmDelete(false);
@@ -262,28 +256,6 @@ export default function SettingsPage() {
     setUsers((prev) => prev.map((u) => u.uid === selectedUser.uid ? updated : u));
     setSelectedUser(updated);
     setSavingUserEdit(false);
-  }
-
-  async function handleSaveInvoiceEmail() {
-    if (!selectedBiz) return;
-    setSavingEmail(true);
-    await updateBusinessInvoiceEmail(selectedBiz.id, panelInvoiceEmail.trim());
-    setBusinesses((prev) =>
-      prev.map((b) => b.id === selectedBiz.id ? { ...b, invoiceEmail: panelInvoiceEmail.trim() } : b)
-    );
-    setSelectedBiz((b) => b ? { ...b, invoiceEmail: panelInvoiceEmail.trim() } : b);
-    setSavingEmail(false);
-  }
-
-  async function handleSaveSalesEmail() {
-    if (!selectedBiz) return;
-    setSavingSalesEmail(true);
-    await updateBusinessSalesEmail(selectedBiz.id, panelSalesEmail.trim());
-    setBusinesses((prev) =>
-      prev.map((b) => b.id === selectedBiz.id ? { ...b, salesEmail: panelSalesEmail.trim() } : b)
-    );
-    setSelectedBiz((b) => b ? { ...b, salesEmail: panelSalesEmail.trim() } : b);
-    setSavingSalesEmail(false);
   }
 
   async function handlePanelSaveName() {
@@ -1194,60 +1166,42 @@ export default function SettingsPage() {
                   )}
                 </div>
 
-                {/* Email section */}
-                <div className="glass rounded-2xl p-4 space-y-4">
-                  <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">חשבוניות במייל</p>
+                {/* Auto-generated email addresses */}
+                <div className="glass rounded-2xl p-4 space-y-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide text-right">כתובות מייל אוטומטיות</p>
 
-                  {/* Field 1 — חשבוניות ספקים */}
-                  <div className="space-y-2">
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-gray-800">📦 חשבוניות ספקים</p>
-                      <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
-                        שלח חשבוניות ספקים לכתובת זו — המלאי יעלה אוטומטית
+                  {/* Invoice email */}
+                  <div className="bg-indigo-50/60 rounded-2xl p-4 space-y-1">
+                    <div className="flex items-center gap-2 justify-end">
+                      <span className="text-xs font-medium text-indigo-700">📦 חשבוניות ספקים</span>
+                    </div>
+                    <p className="text-xs text-gray-500 text-right">שלח חשבוניות לכתובת זו — מלאי יעלה אוטומטית</p>
+                    <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2">
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(`invoices+${selectedBiz.id}@inbound.galis.app`); }}
+                        className="text-xs text-indigo-500 border border-indigo-200 rounded-lg px-2 py-1 flex-shrink-0"
+                      >העתק</button>
+                      <p className="text-xs font-mono text-gray-700 text-right flex-1 truncate" dir="ltr">
+                        invoices+{selectedBiz.id}@inbound.galis.app
                       </p>
                     </div>
-                    <input
-                      type="email"
-                      value={panelInvoiceEmail}
-                      onChange={(e) => setPanelInvoiceEmail(e.target.value)}
-                      placeholder="invoices@example.com"
-                      className="w-full bg-white/70 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 transition-all"
-                      dir="ltr"
-                    />
-                    <button
-                      onClick={handleSaveInvoiceEmail}
-                      disabled={savingEmail}
-                      className="press w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white py-2.5 rounded-xl text-sm font-semibold shadow-md disabled:opacity-50"
-                    >
-                      {savingEmail ? 'שומר...' : 'שמור'}
-                    </button>
                   </div>
 
-                  <div className="border-t border-gray-100" />
-
-                  {/* Field 2 — דוחות מכירות */}
-                  <div className="space-y-2">
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-gray-800">🛒 דוחות מכירות</p>
-                      <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
-                        שלח דוחות מכירות לכתובת זו — המלאי ירד אוטומטית
+                  {/* Sales email */}
+                  <div className="bg-green-50/60 rounded-2xl p-4 space-y-1">
+                    <div className="flex items-center gap-2 justify-end">
+                      <span className="text-xs font-medium text-green-700">🛒 דוחות מכירות</span>
+                    </div>
+                    <p className="text-xs text-gray-500 text-right">שלח דוחות מכירות לכתובת זו — מלאי ירד אוטומטית</p>
+                    <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2">
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(`sales+${selectedBiz.id}@inbound.galis.app`); }}
+                        className="text-xs text-green-500 border border-green-200 rounded-lg px-2 py-1 flex-shrink-0"
+                      >העתק</button>
+                      <p className="text-xs font-mono text-gray-700 text-right flex-1 truncate" dir="ltr">
+                        sales+{selectedBiz.id}@inbound.galis.app
                       </p>
                     </div>
-                    <input
-                      type="email"
-                      value={panelSalesEmail}
-                      onChange={(e) => setPanelSalesEmail(e.target.value)}
-                      placeholder="sales@example.com"
-                      className="w-full bg-white/70 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-300 transition-all"
-                      dir="ltr"
-                    />
-                    <button
-                      onClick={handleSaveSalesEmail}
-                      disabled={savingSalesEmail}
-                      className="press w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white py-2.5 rounded-xl text-sm font-semibold shadow-md disabled:opacity-50"
-                    >
-                      {savingSalesEmail ? 'שומר...' : 'שמור'}
-                    </button>
                   </div>
                 </div>
 
@@ -1325,6 +1279,47 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {/* Auto-generated email addresses for regular users */}
+        {business?.id && (
+          <div className="glass rounded-3xl p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide text-right">מייל לעדכון מלאי</p>
+
+            {/* Invoice email */}
+            <div className="bg-indigo-50/60 rounded-2xl p-3 space-y-1">
+              <div className="flex items-center gap-2 justify-end">
+                <span className="text-xs font-medium text-indigo-700">📦 חשבוניות ספקים</span>
+              </div>
+              <p className="text-xs text-gray-500 text-right">שלח חשבוניות לכתובת זו — מלאי יעלה אוטומטית</p>
+              <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2">
+                <button
+                  onClick={() => { navigator.clipboard.writeText(`invoices+${business.id}@inbound.galis.app`); }}
+                  className="text-xs text-indigo-500 border border-indigo-200 rounded-lg px-2 py-1 flex-shrink-0"
+                >העתק</button>
+                <p className="text-xs font-mono text-gray-700 text-right flex-1 truncate" dir="ltr">
+                  invoices+{business.id}@inbound.galis.app
+                </p>
+              </div>
+            </div>
+
+            {/* Sales email */}
+            <div className="bg-green-50/60 rounded-2xl p-3 space-y-1">
+              <div className="flex items-center gap-2 justify-end">
+                <span className="text-xs font-medium text-green-700">🛒 דוחות מכירות</span>
+              </div>
+              <p className="text-xs text-gray-500 text-right">שלח דוחות מכירות לכתובת זו — מלאי ירד אוטומטית</p>
+              <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2">
+                <button
+                  onClick={() => { navigator.clipboard.writeText(`sales+${business.id}@inbound.galis.app`); }}
+                  className="text-xs text-green-500 border border-green-200 rounded-lg px-2 py-1 flex-shrink-0"
+                >העתק</button>
+                <p className="text-xs font-mono text-gray-700 text-right flex-1 truncate" dir="ltr">
+                  sales+{business.id}@inbound.galis.app
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Account card */}
         <div className="glass rounded-3xl p-5">
